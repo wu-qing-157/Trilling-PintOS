@@ -100,6 +100,13 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* GXY's code begin */
+
+    /* Time to wakeup this thread */
+    int64_t wakeup_tick;
+
+    /* GXY's code end */
   };
 
 /* If false (default), use round-robin scheduler.

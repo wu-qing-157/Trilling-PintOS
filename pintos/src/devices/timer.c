@@ -30,6 +30,13 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+/* GXY's code begin */
+
+/* List of all sleeping threads */
+static struct list timer_sleep_list;
+
+/* GXY's code end */
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +44,9 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  /* GXY's code begin */
+  list_init(&timer_sleep_list);
+  /* GXY's code end */
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,12 +99,54 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  /* old code begin */
+  /*
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
+  */
+  /* old code end */
+
+  /* GXY's code begin */
+  ASSERT(intr_get_level() == INTR_ON);
+  timer_sleep_impl(timer_ticks() + ticks);
+  /* GXY's code end */
 }
+
+/* GXY's code begin */
+
+/* Compare two threads by their wakeup_tick */
+static bool tick_less(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  ASSERT(a != NULL && b != NULL);
+  return list_entry(a, struct thread, elem)->wakeup_tick < list_entry(b, struct thread, elem)->wakeup_tick;
+}
+
+/* Sleep current thread until wakeup_tick */
+void timer_sleep_impl(int64_t wakeup_tick) {
+  struct thread *cur = thread_current();
+  enum intr_level old_intr_level = intr_disable();
+  cur->wakeup_tick = wakeup_tick;
+  list_insert_ordered(&timer_sleep_list, &cur->elem, tick_less, NULL);
+  thread_block();
+  intr_set_level(old_intr_level);
+}
+
+/* Wakeup threads timer_sleep_list */
+void timer_wakeup(void) {
+  if (list_empty(&timer_sleep_list)) return;
+  for (struct list_elem *cur = list_begin(&timer_sleep_list); cur != list_end(&timer_sleep_list); cur = list_next(cur)) {
+    struct thread *th = list_entry(cur, struct thread, elem);
+    if (th->wakeup_tick > timer_ticks()) break;
+    enum intr_level old_intr_level = intr_disable();
+    cur = list_prev(list_remove(cur));
+    thread_unblock(th);
+    intr_set_level(old_intr_level);
+  }
+}
+
+/* GXY's code end */
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
@@ -172,6 +224,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  /* GXY's code begin */
+  timer_wakeup();
+  /* GXY's code end */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
