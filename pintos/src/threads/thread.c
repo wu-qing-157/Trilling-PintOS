@@ -71,6 +71,44 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* GXY's code begin */
+
+/* Donate priority from donator to receiver, also called if donator's priority increases.
+ * Note that a thread cannot change it's priority when it is waiting for other threads.
+ */
+static void donate_priority(struct thread *donator, struct thread *receiver, bool new_donator) {
+  if (new_donator) list_push_back(&receiver->donating, &donator->donating_elem);
+  if (receiver->donated_priority < donator->donated_priority) {
+    receiver->donated_priority = donator->donated_priority;
+    if (receiver->waiting != NULL) donate_priority(receiver, receiver->waiting, false);
+  }
+}
+
+/* Called if a donator is deleted, or the donator's priority decreases, or receiver's priority decreases.
+ * Donator can be NULL if delete_donator is false.
+ */
+static void modify_donate_priority(struct thread *donator, struct thread *receiver, bool delete_donator) {
+  if (delete_donator) list_remove(&donator->donating_elem);
+  int old_donated_priority = receiver->donated_priority;
+  receiver->donated_priority = receiver->priority;
+  for (struct list_elem *it = list_begin(&receiver->donating); it != list_end(&receiver->donating); it = list_next(it)) {
+    int cur = list_entry(it, struct thread, donating_elem)->donated_priority;
+    if (cur > receiver->donated_priority) receiver->donated_priority = cur;
+  }
+  if (receiver->donated_priority < old_donated_priority && receiver->waiting != NULL)
+    modify_donate_priority(receiver, receiver->waiting, false);
+}
+
+/* Compare threads by their donated priority (higher smaller) */
+static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  ASSERT(a != NULL && b != NULL);
+  struct thread *aa = list_entry(a, struct thread, elem);
+  struct thread *bb = list_entry(b, struct thread, elem);
+  return aa->donated_priority > bb->donated_priority;
+}
+
+/* GXY's code end */
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -201,6 +239,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* GXY's code begin */
+  thread_yield();
+  /* GXY's code end */
+
   return tid;
 }
 
@@ -215,6 +257,11 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
+
+  /* GXY's code begin */
+  struct thread *cur = thread_current();
+  if (cur->waiting != NULL) donate_priority(cur, cur->waiting, true);
+  /* GXY's code end */ 
 
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
@@ -238,6 +285,9 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
+  /* GXY's code begin */
+  if (t->waiting != NULL) modify_donate_priority(t, t->waiting, true);
+  /* GXY's code end */
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -336,13 +386,22 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  /* GXY's code begin */
+  modify_donate_priority(NULL, thread_current(), false);
+  thread_yield();
+  /* GXY's code end */
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  /* old code begin */
+  // return thread_current ()->priority;
+  /* old code end */
+  /* GXY's code begin */
+  return thread_current()->donated_priority;
+  /* GXY's code end */
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -464,6 +523,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  /* GXY's code begin */
+  list_init(&t->donating);
+  t->donated_priority = t->priority;
+  t->waiting = NULL;
+  /* GXY's code end */
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -492,8 +557,14 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  /* old code begin */
+  // else
+  //   return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  /* old code end */
+  else {
+    list_sort(&ready_list, priority_greater, NULL);
+    return list_entry(list_pop_front(&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page

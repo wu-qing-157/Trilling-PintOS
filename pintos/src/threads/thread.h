@@ -106,6 +106,15 @@ struct thread
     /* Time to wakeup this thread */
     int64_t wakeup_tick;
 
+    /* Donating threads */
+    struct list donating;
+    /* Buffered priority considering donation */
+    int donated_priority;
+    /* List element used in donating list */
+    struct list_elem donating_elem;
+    /* Waiting thread */
+    struct thread *waiting;
+
     /* GXY's code end */
   };
 

@@ -32,6 +32,18 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* GXY's code begin */
+
+/* Compare threads by their donated priority (higher smaller) */
+static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  ASSERT(a != NULL && b != NULL);
+  struct thread *aa = list_entry(a, struct thread, elem);
+  struct thread *bb = list_entry(b, struct thread, elem);
+  return aa->donated_priority > bb->donated_priority;
+}
+
+/* GXY's code end */
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -113,11 +125,22 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  /* old code begin */
+  // if (!list_empty (&sema->waiters)) 
+  //   thread_unblock (list_entry (list_pop_front (&sema->waiters),
+  //                               struct thread, elem));
+  /* old code end */
+  /* GXY's code begin */
+  if (!thread_mlfqs && !list_empty(&sema->waiters)) {
+    list_sort(&sema->waiters, priority_greater, NULL);
+    thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+  }
+  /* GXY's code end */
   sema->value++;
   intr_set_level (old_level);
+  /* GXY's code begin */
+  thread_yield();
+  /* GXY's code end */
 }
 
 static void sema_test_helper (void *sema_);
@@ -195,6 +218,10 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
+
+  /* GXY's code begin */
+  if (!thread_mlfqs && lock->holder != NULL) thread_current()->waiting = lock->holder;
+  /* GXY's code end */
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -301,6 +328,19 @@ cond_wait (struct condition *cond, struct lock *lock)
   lock_acquire (lock);
 }
 
+/* GXY's code begin */
+
+/* Compare by the highest priority of waiting threads */
+static bool sema_priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  struct list *aa = &list_entry(a, struct semaphore_elem, elem)->semaphore.waiters;
+  struct list *bb = &list_entry(b, struct semaphore_elem, elem)->semaphore.waiters;
+  if (list_empty(aa)) return false;
+  if (list_empty(bb)) return true;
+  return list_entry(list_front(aa), struct thread, elem)->donated_priority > list_entry(list_front(bb), struct thread, elem)->donated_priority;
+}
+
+/* GXY's code end */
+
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -316,9 +356,19 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  /* old's code begin */
+  // if (!list_empty (&cond->waiters)) 
+  //   sema_up (&list_entry (list_pop_front (&cond->waiters),
+  //                         struct semaphore_elem, elem)->semaphore);
+  /* old's code end */
+  /* GXY's code begin */
+  if (!thread_mlfqs && !list_empty(&cond->waiters)) {
+    for (struct list_elem *it = list_begin(&cond->waiters); it != list_end(&cond->waiters); it = list_next(it))
+      list_sort(&list_entry(it, struct semaphore_elem, elem)->semaphore.waiters, priority_greater, NULL);
+    list_sort(&cond->waiters, sema_priority_greater, NULL);
+    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  }
+  /* GXY's code end */
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

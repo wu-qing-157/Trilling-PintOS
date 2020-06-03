@@ -6,7 +6,7 @@ Work|Who|Status
 ---|---|---
 __Threads__||
 Alarm Clock|GXY|Pass Test
-Priority Scheduling||
+Priority Scheduling|GXY|Pass Test
 Advanced Scheduler||
 __User Programs__||
 Process Termination Messages||
