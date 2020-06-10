@@ -50,7 +50,7 @@ static void exit_forcely (void);
 
 /* GLS's code begin */
 /* As suggested by 4.3.4, only a user process can call into file system at once.
-This means the code in the folder 'filesys' is a cirtical section. */
+This means the code in the folder 'filesys' is a critical section. */
 static struct lock syscall_filesys_lock;
 /* GLS's code end */
 
