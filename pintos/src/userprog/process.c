@@ -75,6 +75,9 @@ process_execute (const char *file_name)
   p_desc->exited = false;
   p_desc->exit_status = -1;
   p_desc->load_success = false;
+  p_desc->own_file = NULL;
+  list_init(&(p_desc->opened_files));
+  p_desc->opened_count = 2; //STDIN_FILEON, STDIN_FILEON.  
   sema_init(&(p_desc->load_sema), 0);
   sema_init(&(p_desc->wait_sema), 0);
 
@@ -111,7 +114,6 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 { 
-  // printf ("@@@ start_process @@@\n");
   /* old code begin */
   // char *file_name = file_name_;
   // struct intr_frame if_;
@@ -238,7 +240,7 @@ process_wait (tid_t child_tid /* UNUSED */)
   struct list_elem *child_elem = NULL;
   struct process_descriptor *child_p_desc = NULL;
 
-  if (! list_empty (child_process)) {
+  if (!list_empty (child_process)) {
     /* will PANIC if empty! */
     for (child_elem = list_front (child_process); child_elem != list_end (child_process); 
       child_elem = list_next (child_elem)) {
@@ -283,7 +285,8 @@ process_exit (void)
 
   /* GLS's code begin */
   /* close all opened files */
-  struct list *opened_files = &(cur->opened_files);
+  struct process_descriptor *p_desc = cur->p_desc;
+  struct list *opened_files = &(p_desc->opened_files);
   while (!list_empty (opened_files)) {
     struct list_elem *front = list_pop_front (opened_files);
     struct file_descriptor *f_desc = list_entry (front, struct file_descriptor, elem);
@@ -303,12 +306,11 @@ process_exit (void)
     }
   }
 
-  if (cur->own_file != NULL) {
-    file_close (cur->own_file);
+  if (p_desc->own_file != NULL) {
+    file_close (cur->p_desc->own_file);
   }
   
   /* free own process_descriptor if no parent */
-  struct process_descriptor *p_desc = cur->p_desc;
   p_desc->exited = true;
   printf("%s: exit(%d)\n", cur->name, p_desc->exit_status);
   /* Task 1: print termination messages. */
@@ -535,7 +537,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* GLS's code begin */
   /* Task 5: Denying Writes to Executables. */
   file_deny_write (file);
-  thread_current()->own_file = file;
+  t->p_desc->own_file = file;
   /* GLS's code end */
 
  done:

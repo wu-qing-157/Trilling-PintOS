@@ -99,10 +99,7 @@ struct thread
    
    /* GLS's code begin */
    struct process_descriptor *p_desc;
-   struct file* own_file;  
    struct list child_process;
-   struct list opened_files;
-   int opened_count;
    /* GLS's code end */
 
 #endif

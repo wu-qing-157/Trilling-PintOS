@@ -470,10 +470,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /* GLS's code begin */
   #ifdef USERPROG
     t->p_desc = NULL;
-    t->own_file = NULL;
     list_init(&(t->child_process));
-    list_init(&(t->opened_files));
-    t->opened_count = 2; //STDIN_FILEON, STDIN_FILEON.
   #endif
   /* GLS's code end */
 }

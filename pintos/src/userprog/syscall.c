@@ -271,14 +271,15 @@ syscall_open (const char *file) {
   
   if (opened_file != NULL) {
     struct thread *current_thread = thread_current();
+    struct process_descriptor *p_desc = current_thread->p_desc;
     struct file_descriptor *f_desc = palloc_get_page(0);
     if (f_desc == NULL) {
       // printf("[Error] open(): can't palloc a new page.\n");
     }
     else {
       f_desc->file = opened_file;
-      f_desc->id = current_thread->opened_count++;
-      list_push_back(&(current_thread->opened_files), &(f_desc->elem));
+      f_desc->id = p_desc->opened_count++;
+      list_push_back(&(p_desc->opened_files), &(f_desc->elem));
       return_value = f_desc->id;
     }
   }
@@ -441,7 +442,7 @@ static struct file_descriptor*
 find_file (struct thread *t, fid_t fd) {
   if (fd < 2) /* STDIN_FILEON or STDOUT_FILEON */
     return NULL;
-  struct list *opened_files = &(t->opened_files);
+  struct list *opened_files = &(t->p_desc->opened_files);
   struct list_elem *file_elem = NULL;
   for (file_elem = list_begin (opened_files); file_elem != list_end (opened_files); 
     file_elem = list_next (file_elem)) {

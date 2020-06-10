@@ -5,6 +5,7 @@
 
 /* GLS's code begin */
 #include "threads/synch.h"
+#include "filesys/file.h"
 #define PID_INIT ((pid_t) -1)
 typedef int pid_t;
 /* GLS's code end */
@@ -24,6 +25,9 @@ struct process_descriptor {
     bool exited;   // the process have exited or not.
     int exit_status;
     struct list_elem elem;
+    struct file* own_file;  
+    struct list opened_files;
+    int opened_count;
     bool load_success;
     struct semaphore load_sema;
     struct semaphore wait_sema;
