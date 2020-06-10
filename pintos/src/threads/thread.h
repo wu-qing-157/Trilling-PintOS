@@ -95,9 +95,18 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-#endif
+   uint32_t *pagedir;                  /* Page directory. */
+   
+   /* GLS's code begin */
+   struct process_descriptor *p_desc;
+   struct file* own_file;  
+   struct list child_process;
+   struct list opened_files;
+   int opened_count;
+   /* GLS's code end */
 
+#endif
+   
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

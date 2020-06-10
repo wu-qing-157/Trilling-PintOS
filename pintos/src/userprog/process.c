@@ -18,8 +18,17 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+/* GLS's code begin */
+#include "kernel/list.h"
+#include "syscall.h"
+/* GLS's code end */
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+/* GLS's code begin */
+static void push_args_into_stack(uint32_t argc, char **argv, void **esp);
+/* GLS's code end */
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,10 +47,62 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  /* GLS's code begin */
+  struct thread *current_thread = thread_current();
+  char *real_file_name = palloc_get_page (0);
+  char *save_ptr = NULL;
+  if (real_file_name == NULL) {
+    printf("[Error] process_excute(): can't palloc a new page.");
+    palloc_free_page (fn_copy);
+    return TID_ERROR;
+  }
+  strlcpy (real_file_name, file_name, PGSIZE);
+  real_file_name = strtok_r (real_file_name, " ", &save_ptr);
+  
+  /* initialize process descriptor */
+  struct process_descriptor *p_desc = palloc_get_page (0);
+  if (p_desc == NULL) {
+    printf("[Error] process_excute: can't palloc a new page.");
+    palloc_free_page (fn_copy);
+    palloc_free_page (real_file_name);
+    return TID_ERROR;
+  }
+  p_desc->pid = PID_INIT;
+  p_desc->current_thread = NULL;
+  p_desc->parent_thread = current_thread;
+  p_desc->cmd = fn_copy;
+  p_desc->waited = false;
+  p_desc->exited = false;
+  p_desc->exit_status = -1;
+  p_desc->load_success = false;
+  sema_init(&(p_desc->load_sema), 0);
+  sema_init(&(p_desc->wait_sema), 0);
+
+  tid = thread_create (real_file_name, PRI_DEFAULT, start_process, p_desc);
+
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
+  }
+  else {
+    sema_down(&(p_desc->load_sema));
+    if(p_desc->load_success) {
+      list_push_back (&(thread_current()->child_process), &(p_desc->elem));
+    }
+    else {
+      tid = TID_ERROR;
+    }
+  }
+  palloc_free_page (real_file_name); 
+  /* will be copyed when creating thread so can be palloced. */
+  /* GLS's code end */
+
+  /* old code begin */
+  // /* Create a new thread to execute FILE_NAME. */
+  // tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  // if (tid == TID_ERROR)
+  // palloc_free_page (fn_copy); 
+  /* old code end */
+  
   return tid;
 }
 
@@ -49,17 +110,60 @@ process_execute (const char *file_name)
    running. */
 static void
 start_process (void *file_name_)
-{
-  char *file_name = file_name_;
-  struct intr_frame if_;
-  bool success;
+{ 
+  // printf ("@@@ start_process @@@\n");
+  /* old code begin */
+  // char *file_name = file_name_;
+  // struct intr_frame if_;
+  // bool success;
 
-  /* Initialize interrupt frame and load executable. */
-  memset (&if_, 0, sizeof if_);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  // /* Initialize interrupt frame and load executable. */
+  // memset (&if_, 0, sizeof if_);
+  // if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  // if_.cs = SEL_UCSEG;
+  //if_.eflags = FLAG_IF | FLAG_MBS;
+  //success = load (file_name, &if_.eip, &if_.esp);
+  /* old code end */
+
+
+  /* GLS's code begin */
+  struct intr_frame if_;
+  bool success = false;
+  
+  /* every process corresponds to a thread. */
+  struct thread *current_thread = thread_current();
+  struct process_descriptor *p_desc = file_name_;
+  p_desc->current_thread = current_thread;
+  current_thread->p_desc = p_desc;
+
+  char *file_name = p_desc->cmd;
+  uint32_t argc = 0;
+  char **argv = (char**) palloc_get_page (0);
+  if (argv != NULL) {
+    /* split command line to arguments */
+    char *save_ptr = NULL, *token = NULL;
+    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; 
+      token = strtok_r(NULL, " ", &save_ptr)) {
+        argv[argc++] = token;    
+      }
+
+    /* Initialize interrupt frame and load executable. */
+    memset (&if_, 0, sizeof if_);
+    if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+    if_.cs = SEL_UCSEG;
+    if_.eflags = FLAG_IF | FLAG_MBS;
+    success = load (file_name, &if_.eip, &if_.esp);
+    
+    if (success) {
+      push_args_into_stack(argc, argv, &if_.esp);
+      palloc_free_page (argv);
+    }
+    /* argvs will be copyed when being pushed into stack so can be free. */
+  }
+  p_desc->load_success = success;
+  p_desc->pid = current_thread->tid; 
+  sema_up(&(p_desc->load_sema));
+  /* GLS's code end */
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -76,6 +180,46 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+/* GLS's code begin */
+static void
+push_args_into_stack(uint32_t argc, char **argv, void **esp) {
+  /* push all argv[i][] into stack */
+  void* argv_sp[argc];
+  int i = 0, argv_len = 0;
+  for (i = argc - 1; i >= 0; --i) {
+    argv_len = strlen(argv[i]) + 1;
+    *esp -= argv_len;
+    memcpy(*esp, argv[i], argv_len);
+    argv_sp[i] = *esp;
+  }
+
+  /* make the last 2 bits of esp to 00. */
+  *esp = (void*) (((uint32_t) (*esp)) & 0xfffffffc);
+
+  /* push argv[argc](null) into stack. */
+  *esp -= 4;
+  *((uint32_t*) *esp) = 0;
+
+  /* push argv[i] into stack. */
+  for (i = argc - 1; i >= 0; --i) {
+    *esp -= 4;
+    *((void**) *esp) = argv_sp[i];
+  }
+
+  /* push argv into stack. */
+  *esp -= 4;
+  *((void**) *esp) = (*esp + 4);  
+
+  /* push argc into stack. */
+  *esp -= 4;
+  *((uint32_t*) *esp) = argc;
+
+  /* push return address into stack. */
+  *esp -= 4;
+  *((int*) *esp) = 0;
+}
+/* GLS's code end */
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -86,9 +230,48 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
-{
-  return -1;
+process_wait (tid_t child_tid /* UNUSED */) 
+{ 
+  /* GLS's code begin */
+  struct thread *current_thread = thread_current();
+  struct list *child_process = &(current_thread->child_process);
+  struct list_elem *child_elem = NULL;
+  struct process_descriptor *child_p_desc = NULL;
+
+  if (! list_empty (child_process)) {
+    /* will PANIC if empty! */
+    for (child_elem = list_front (child_process); child_elem != list_end (child_process); 
+      child_elem = list_next (child_elem)) {
+        struct process_descriptor *tmp = list_entry(child_elem, struct process_descriptor, elem);
+        if (tmp->pid == child_tid) {
+          child_p_desc = tmp;
+          break;
+        }
+      }
+  } 
+
+  if (child_p_desc == NULL || child_p_desc->waited) {
+    /* case 1: pid doesn't refer to a direct child of the current process. */
+    /* case 2: pid has been waiting by the current process. */
+    return -1;
+  }
+
+  child_p_desc->waited = true;
+  if (!child_p_desc->exited)
+    sema_down(&(child_p_desc->wait_sema));
+  
+  list_remove (child_elem);
+
+  int exit_status = child_p_desc->exit_status;
+  palloc_free_page (child_p_desc);
+   /* child_p_desc must be free by the parent process,
+    because the parent process will use child_p_desc->exit_status. */
+  return exit_status;
+  /* GLS's code end */
+
+  /* old code begin */
+  // return -1;
+  /* old code end */
 }
 
 /* Free the current process's resources. */
@@ -97,6 +280,45 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* GLS's code begin */
+  /* close all opened files */
+  struct list *opened_files = &(cur->opened_files);
+  while (!list_empty (opened_files)) {
+    struct list_elem *front = list_pop_front (opened_files);
+    struct file_descriptor *f_desc = list_entry (front, struct file_descriptor, elem);
+    syscall_close_file (f_desc);
+    /* syscall_close_file() : implemented in 'syscall.c' specially. */
+  }
+
+  /* free children's process_descriptor */
+  struct list *child_process = &(cur->child_process);
+  while (!list_empty (child_process)) {
+    struct list_elem *front = list_pop_front (child_process);
+    struct process_descriptor *child_p_desc = list_entry (front, struct process_descriptor, elem);
+    if (child_p_desc->exited) {
+      /* child_p_desc must be free by the parent process,
+         because the parent process need child_p_desc->exit_status */
+      palloc_free_page (child_p_desc);   
+    }
+  }
+
+  if (cur->own_file != NULL) {
+    file_close (cur->own_file);
+  }
+  
+  /* free own process_descriptor if no parent */
+  struct process_descriptor *p_desc = cur->p_desc;
+  p_desc->exited = true;
+  printf("%s: exit(%d)\n", cur->name, p_desc->exit_status);
+  /* Task 1: print termination messages. */
+  if (p_desc->parent_thread == NULL) {
+    palloc_free_page (p_desc);
+  }
+  else {
+    sema_up (&(p_desc->wait_sema));
+  }
+  /* GLS's code end */  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -310,9 +532,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
+  /* GLS's code begin */
+  /* Task 5: Denying Writes to Executables. */
+  file_deny_write (file);
+  thread_current()->own_file = file;
+  /* GLS's code end */
+
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  
+  /* old code begin */
+  // file_close (file);
+  /* old code begin */
   return success;
 }
 
