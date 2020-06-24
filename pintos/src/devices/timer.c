@@ -118,7 +118,7 @@ timer_sleep (int64_t ticks)
 /* GXY's code begin */
 
 /* Compare two threads by their wakeup_tick */
-static bool tick_less(const struct list_elem *a, const struct list_elem *b, void *aux) {
+static bool tick_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   ASSERT(a != NULL && b != NULL);
   return list_entry(a, struct thread, elem)->wakeup_tick < list_entry(b, struct thread, elem)->wakeup_tick;
 }

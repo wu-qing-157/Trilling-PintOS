@@ -115,6 +115,11 @@ struct thread
     /* Waiting thread */
     struct thread *waiting;
 
+    /* Nice used in BSD */
+    int nice;
+    /* Recent CPU used in BSD */
+    int recent_cpu;
+
     /* GXY's code end */
   };
 

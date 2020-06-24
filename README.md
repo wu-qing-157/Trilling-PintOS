@@ -7,7 +7,7 @@ Work|Who|Status
 __Threads__||
 Alarm Clock|GXY|Pass Test
 Priority Scheduling|GXY|Pass Test
-Advanced Scheduler||
+Advanced Scheduler|GXY|Pass Test
 __User Programs__||
 Process Termination Messages||
 Argument Passing||

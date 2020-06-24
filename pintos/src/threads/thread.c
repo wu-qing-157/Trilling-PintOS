@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "devices/timer.h"
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -99,13 +100,28 @@ static void modify_donate_priority(struct thread *donator, struct thread *receiv
     modify_donate_priority(receiver, receiver->waiting, false);
 }
 
+/* Compare threads by their priority (higher smaller) */
+static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  ASSERT(a != NULL && b != NULL);
+  struct thread *aa = list_entry(a, struct thread, elem);
+  struct thread *bb = list_entry(b, struct thread, elem);
+  return aa->priority > bb->priority;
+}
+
 /* Compare threads by their donated priority (higher smaller) */
-static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux) {
+static bool donated_priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   ASSERT(a != NULL && b != NULL);
   struct thread *aa = list_entry(a, struct thread, elem);
   struct thread *bb = list_entry(b, struct thread, elem);
   return aa->donated_priority > bb->donated_priority;
 }
+
+/* GXY's code end */
+
+/* GXY's code begin */
+
+// Load average as fixed-point real
+int load_avg;
 
 /* GXY's code end */
 
@@ -131,6 +147,10 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
+  /* GXY's code begin */
+  load_avg = 0;
+  /* GXY's code end */
+
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -155,6 +175,43 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+/* GXY's code start */
+
+#define REAL_SHIFT 14
+
+static int int_to_real(int n) {
+  return n << REAL_SHIFT;
+}
+
+static int real_to_int_round(int x) {
+  return x >= 0 ? (x + (1 << (REAL_SHIFT - 1))) >> REAL_SHIFT : (x - (1 << (REAL_SHIFT - 1))) >> REAL_SHIFT;
+}
+
+static int real_add_int(int x, int n) {
+  return x + (n << REAL_SHIFT);
+}
+
+static int real_mul(int x, int y) {
+  return (((int64_t) x) * y) >> REAL_SHIFT; 
+}
+
+static int real_div(int x, int y) {
+  return (((int64_t) x) << REAL_SHIFT) / y;
+}
+
+/* Bound priority so that it do not exceed [PRI_MIN, PRI_MAX] */
+static int bound_priority(int priority) {
+  if (priority > PRI_MAX) return PRI_MAX;
+  if (priority < PRI_MIN) return PRI_MIN;
+  return priority;
+}
+
+static int calc_priority(int recent_cpu, int nice) {
+  return bound_priority(PRI_MAX - real_to_int_round(recent_cpu / 4) - nice * 2);
+}
+
+/* GXY's code end */
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -171,6 +228,26 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /* GXY's code begin */
+  if (thread_mlfqs) {
+    if (t->status == THREAD_RUNNING) {
+      t->recent_cpu = real_add_int(t->recent_cpu, 1);
+      t->priority = calc_priority(t->recent_cpu, t->nice);
+    }
+    if (timer_ticks() % TIMER_FREQ == 0) {
+      int ready_count = list_size(&ready_list);
+      if (t != idle_thread) ready_count++;
+      load_avg = load_avg * 59 / 60 + int_to_real(ready_count) / 60;
+      for (struct list_elem *it = list_begin(&all_list); it != list_end(&all_list); it = list_next(it)) {
+        struct thread *th = list_entry(it, struct thread, allelem);
+        th->recent_cpu = real_add_int(real_mul(real_div(load_avg * 2, real_add_int(load_avg * 2, 1)), th->recent_cpu), th->nice);
+        th->priority = calc_priority(th->recent_cpu, th->nice);
+      }
+      intr_yield_on_return();
+    }
+  }
+  /* GXY's code end */
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -240,6 +317,12 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   /* GXY's code begin */
+  static bool first = true;
+  if (thread_mlfqs) {
+    t->nice = first ? 0 : thread_current()->nice;
+    t->recent_cpu = first ? 0 : thread_current()->recent_cpu;
+    first = false;
+  }
   thread_yield();
   /* GXY's code end */
 
@@ -387,7 +470,7 @@ thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
   /* GXY's code begin */
-  modify_donate_priority(NULL, thread_current(), false);
+  if (!thread_mlfqs) modify_donate_priority(NULL, thread_current(), false);
   thread_yield();
   /* GXY's code end */
 }
@@ -406,33 +489,40 @@ thread_get_priority (void)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
-  /* Not yet implemented. */
+  /* GXY's code begin */
+  struct thread *t = thread_current();
+  t->nice = nice;
+  thread_set_priority(calc_priority(t->recent_cpu, nice));
+  /* GXY's code end */
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* GXY's code begin */
+  return thread_current()->nice;
+  /* GXY's code end */
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* GXY's code begin */
+  return real_to_int_round(load_avg * 100);
+  /* GXY's code end */
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* GXY's code begin */
+  return real_to_int_round(thread_current()->recent_cpu * 100);
+  /* GXY's code end */
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -527,6 +617,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->donating);
   t->donated_priority = t->priority;
   t->waiting = NULL;
+  t->nice = 0;
   /* GXY's code end */
 
   old_level = intr_disable ();
@@ -561,10 +652,12 @@ next_thread_to_run (void)
   // else
   //   return list_entry (list_pop_front (&ready_list), struct thread, elem);
   /* old code end */
+  /* GXY's code begin */
   else {
-    list_sort(&ready_list, priority_greater, NULL);
+    list_sort(&ready_list, thread_mlfqs ? priority_greater : donated_priority_greater, NULL);
     return list_entry(list_pop_front(&ready_list), struct thread, elem);
   }
+  /* GXY's code end */
 }
 
 /* Completes a thread switch by activating the new thread's page
