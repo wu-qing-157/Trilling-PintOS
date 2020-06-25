@@ -148,6 +148,16 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  /* GLS's code begin */ 
+  /* The following code is suggested by 4.1.5 (Accessing User Memory) 
+  in the document to handle: a pointer to kernel virtual address. */
+  if (!user) {
+    f->eip = (void*) f->eax;
+    f->eax = 0xffffffff;
+    return;
+  }
+   /* GLS's code end */
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

@@ -7,13 +7,13 @@ Work|Who|Status
 __Threads__||
 Alarm Clock|GXY|Pass Test
 Priority Scheduling|GXY|Pass Test
-Advanced Scheduler|GXY|Pass Test
+Advanced Scheduler||
 __User Programs__||
-Process Termination Messages||
-Argument Passing||
-Accessing User Memory||
-System Calls||
-Denying Writes to Executables||
+Process Termination Messages|GLS|Pass Test
+Argument Passing|GLS|Pass Test
+Accessing User Memory|GLS|Pass Test
+System Calls|GLS|Pass Test
+Denying Writes to Executables|GLS|Pass Test
 __Virtual Memory__||
 Paging||
 Stack Growth||
@@ -121,4 +121,9 @@ new_line;
 new_line;
 new_line;
 /* WHO's code end */ 
+<<<<<<< HEAD
 ```
+=======
+```
+
+>>>>>>> project2

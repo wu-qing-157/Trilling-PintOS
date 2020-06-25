@@ -297,7 +297,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -312,7 +312,7 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
+  
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -360,7 +360,7 @@ thread_block (void)
    update other data. */
 void
 thread_unblock (struct thread *t) 
-{
+{//printf("thread_unblock: %s\n", t->name);
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -395,8 +395,8 @@ thread_current (void)
      have overflowed its stack.  Each thread has less than 4 kB
      of stack, so a few big automatic arrays or moderate
      recursion can cause stack overflow. */
-  ASSERT (is_thread (t));
-  ASSERT (t->status == THREAD_RUNNING);
+  //ASSERT (is_thread (t));
+  //ASSERT (t->status == THREAD_RUNNING);
 
   return t;
 }
@@ -623,6 +623,13 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  /* GLS's code begin */
+  #ifdef USERPROG
+    t->p_desc = NULL;
+    list_init(&(t->child_process));
+  #endif
+  /* GLS's code end */
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -724,8 +731,10 @@ schedule (void)
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
 
-  if (cur != next)
+  if (cur != next) {
     prev = switch_threads (cur, next);
+   // printf("switch to  %d %s\n", thread_current()->tid, thread_current()->name);
+  }
   thread_schedule_tail (prev);
 }
 
