@@ -22,7 +22,7 @@ Accessing User Memory||
 __File Systems__||
 Indexed and Extensible Files||
 Subdirectories||
-Buffer Cache||
+Buffer Cache|GXY|Seems OK
 Synchronization||
 __Additional Features__||
 
