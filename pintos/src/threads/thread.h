@@ -114,8 +114,7 @@ struct thread
 
     /* Donating threads */
     struct list donating;
-    /* Buffered priority considering donation */
-    int donated_priority;
+    int raw_priority;
     /* List element used in donating list */
     struct list_elem donating_elem;
     /* Waiting thread */

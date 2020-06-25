@@ -79,8 +79,8 @@ static tid_t allocate_tid (void);
  */
 static void donate_priority(struct thread *donator, struct thread *receiver, bool new_donator) {
   if (new_donator) list_push_back(&receiver->donating, &donator->donating_elem);
-  if (receiver->donated_priority < donator->donated_priority) {
-    receiver->donated_priority = donator->donated_priority;
+  if (receiver->priority < donator->priority) {
+    receiver->priority = donator->priority;
     if (receiver->waiting != NULL) donate_priority(receiver, receiver->waiting, false);
   }
 }
@@ -90,13 +90,13 @@ static void donate_priority(struct thread *donator, struct thread *receiver, boo
  */
 static void modify_donate_priority(struct thread *donator, struct thread *receiver, bool delete_donator) {
   if (delete_donator) list_remove(&donator->donating_elem);
-  int old_donated_priority = receiver->donated_priority;
-  receiver->donated_priority = receiver->priority;
+  int old_priority = receiver->priority;
+  receiver->priority = receiver->raw_priority;
   for (struct list_elem *it = list_begin(&receiver->donating); it != list_end(&receiver->donating); it = list_next(it)) {
-    int cur = list_entry(it, struct thread, donating_elem)->donated_priority;
-    if (cur > receiver->donated_priority) receiver->donated_priority = cur;
+    int cur = list_entry(it, struct thread, donating_elem)->priority;
+    if (cur > receiver->priority) receiver->priority = cur;
   }
-  if (receiver->donated_priority < old_donated_priority && receiver->waiting != NULL)
+  if (receiver->priority < old_priority && receiver->waiting != NULL)
     modify_donate_priority(receiver, receiver->waiting, false);
 }
 
@@ -106,14 +106,6 @@ static bool priority_greater(const struct list_elem *a, const struct list_elem *
   struct thread *aa = list_entry(a, struct thread, elem);
   struct thread *bb = list_entry(b, struct thread, elem);
   return aa->priority > bb->priority;
-}
-
-/* Compare threads by their donated priority (higher smaller) */
-static bool donated_priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL && b != NULL);
-  struct thread *aa = list_entry(a, struct thread, elem);
-  struct thread *bb = list_entry(b, struct thread, elem);
-  return aa->donated_priority > bb->donated_priority;
 }
 
 /* GXY's code end */
@@ -374,7 +366,7 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
   intr_set_level (old_level);
   /* GXY's code begin */
-  if (thread_mlfqs ? thread_current()->priority < t->priority : thread_current()->donated_priority < t->donated_priority) {
+  if (thread_current()->priority < t->priority) {
     if (intr_context()) intr_yield_on_return();
     else thread_yield();
   }
@@ -474,9 +466,14 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  /* old code begin */
+  // thread_current ()->priority = new_priority;
+  /* old code end */
   /* GXY's code begin */
-  if (!thread_mlfqs) modify_donate_priority(NULL, thread_current(), false);
+  if (!thread_mlfqs) {
+    thread_current()->raw_priority = new_priority;
+    modify_donate_priority(NULL, thread_current(), false);
+  }
   thread_yield();
   /* GXY's code end */
 }
@@ -489,7 +486,7 @@ thread_get_priority (void)
   // return thread_current ()->priority;
   /* old code end */
   /* GXY's code begin */
-  return thread_mlfqs ? thread_current()->priority : thread_current()->donated_priority;
+  return thread_current()->priority;
   /* GXY's code end */
 }
 
@@ -621,7 +618,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* GXY's code begin */
   list_init(&t->donating);
-  t->donated_priority = t->priority;
+  t->raw_priority = priority;
   t->waiting = NULL;
   t->nice = 0;
   /* GXY's code end */
@@ -667,7 +664,7 @@ next_thread_to_run (void)
   /* old code end */
   /* GXY's code begin */
   else {
-    list_sort(&ready_list, thread_mlfqs ? priority_greater : donated_priority_greater, NULL);
+    list_sort(&ready_list, priority_greater, NULL);
     return list_entry(list_pop_front(&ready_list), struct thread, elem);
   }
   /* GXY's code end */

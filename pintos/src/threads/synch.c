@@ -35,11 +35,11 @@
 /* GXY's code begin */
 
 /* Compare threads by their donated priority (higher smaller) */
-static bool donated_priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   ASSERT(a != NULL && b != NULL);
   struct thread *aa = list_entry(a, struct thread, elem);
   struct thread *bb = list_entry(b, struct thread, elem);
-  return aa->donated_priority > bb->donated_priority;
+  return aa->priority > bb->priority;
 }
 
 /* GXY's code end */
@@ -133,7 +133,7 @@ sema_up (struct semaphore *sema)
   sema->value++;
   /* GXY's code begin */
   if (!list_empty(&sema->waiters)) {
-    list_sort(&sema->waiters, donated_priority_greater, NULL);
+    list_sort(&sema->waiters, priority_greater, NULL);
     thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
   }
   /* GXY's code end */
@@ -333,7 +333,7 @@ static bool sema_priority_greater(const struct list_elem *a, const struct list_e
   struct list *bb = &list_entry(b, struct semaphore_elem, elem)->semaphore.waiters;
   if (list_empty(aa)) return false;
   if (list_empty(bb)) return true;
-  return list_entry(list_front(aa), struct thread, elem)->donated_priority > list_entry(list_front(bb), struct thread, elem)->donated_priority;
+  return list_entry(list_front(aa), struct thread, elem)->priority > list_entry(list_front(bb), struct thread, elem)->priority;
 }
 
 /* GXY's code end */
@@ -362,7 +362,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   if (!list_empty(&cond->waiters)) {
     if (!thread_mlfqs) {
       for (struct list_elem *it = list_begin(&cond->waiters); it != list_end(&cond->waiters); it = list_next(it))
-        list_sort(&list_entry(it, struct semaphore_elem, elem)->semaphore.waiters, donated_priority_greater, NULL);
+        list_sort(&list_entry(it, struct semaphore_elem, elem)->semaphore.waiters, priority_greater, NULL);
       list_sort(&cond->waiters, sema_priority_greater, NULL);
     }
     sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
