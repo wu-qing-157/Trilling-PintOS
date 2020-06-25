@@ -130,17 +130,14 @@ sema_up (struct semaphore *sema)
   //   thread_unblock (list_entry (list_pop_front (&sema->waiters),
   //                               struct thread, elem));
   /* old code end */
+  sema->value++;
   /* GXY's code begin */
   if (!list_empty(&sema->waiters)) {
     list_sort(&sema->waiters, donated_priority_greater, NULL);
     thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
   }
   /* GXY's code end */
-  sema->value++;
   intr_set_level (old_level);
-  /* GXY's code begin */
-  thread_yield();
-  /* GXY's code end */
 }
 
 static void sema_test_helper (void *sema_);

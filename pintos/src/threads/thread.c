@@ -373,6 +373,12 @@ thread_unblock (struct thread *t)
   /* GXY's code end */
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  /* GXY's code begin */
+  if (thread_mlfqs ? thread_current()->priority < t->priority : thread_current()->donated_priority < t->donated_priority) {
+    if (intr_context()) intr_yield_on_return();
+    else thread_yield();
+  }
+  /* GXY's code end */
 }
 
 /* Returns the name of the running thread. */
@@ -483,7 +489,7 @@ thread_get_priority (void)
   // return thread_current ()->priority;
   /* old code end */
   /* GXY's code begin */
-  return thread_current()->donated_priority;
+  return thread_mlfqs ? thread_current()->priority : thread_current()->donated_priority;
   /* GXY's code end */
 }
 
