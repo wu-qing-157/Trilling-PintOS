@@ -76,12 +76,29 @@ void cache_read(block_sector_t sector, void *dest) {
   lock_release(&cache_lock);
 }
 
+void cache_read_at(block_sector_t sector, void *dest, size_t start, size_t cnt) {
+  lock_acquire(&cache_lock);
+  struct cache_entry *entry = cache_lookup_or_evict(sector, true);
+  entry->accessed = true;
+  memcpy(dest, entry->data + start, cnt);
+  lock_release(&cache_lock);
+}
+
 void cache_write(block_sector_t sector, const void *src) {
   lock_acquire(&cache_lock);
   struct cache_entry *entry = cache_lookup_or_evict(sector, false);
   entry->accessed = true;
   entry->dirty = true;
   memcpy(entry->data, src, BLOCK_SECTOR_SIZE);
+  lock_release(&cache_lock);
+}
+
+void cache_write_at(block_sector_t sector, const void *src, size_t start, size_t cnt) {
+  lock_acquire(&cache_lock);
+  struct cache_entry *entry = cache_lookup_or_evict(sector, cnt < BLOCK_SECTOR_SIZE);
+  entry->accessed = true;
+  entry->dirty = true;
+  memcpy(entry->data + start, src, cnt);
   lock_release(&cache_lock);
 }
 

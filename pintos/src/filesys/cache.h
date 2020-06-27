@@ -20,7 +20,9 @@ struct cache_entry {
 void cache_init(void);
 void cache_flush(void);
 void cache_read(block_sector_t sector, void *dest);
+void cache_read_at(block_sector_t sector, void *dest, size_t start, size_t cnt);
 void cache_write(block_sector_t sector, const void *src);
+void cache_write_at(block_sector_t sector, const void *src, size_t start, size_t cnt);
 
 /* GXY's code end */
 
