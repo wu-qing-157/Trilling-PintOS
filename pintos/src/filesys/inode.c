@@ -13,8 +13,8 @@
 #define INODE_MAGIC 0x494e4f44
 
 /* GXY's code begin */
-#define DIRECT_CNT 1
-#define INDIRECT_CNT 0
+#define DIRECT_CNT 60
+#define INDIRECT_CNT 30
 #define DOUBLY_CNT 30
 #define INDIRECT_LENGTH ((int32_t) (BLOCK_SECTOR_SIZE / sizeof(block_sector_t)))
 /* GXY's code end */
@@ -146,7 +146,7 @@ static void inode_undo_allocate(struct inode *inode_, size_t allocated) {
     size_t to = allocated - start;
     if (to > INDIRECT_LENGTH) to = INDIRECT_LENGTH;
     struct indirect_disk indirect_d;
-    cache_read_at(*indirect, indirect_d.sectors + from, from, to - from);
+    cache_read_at(*indirect, indirect_d.sectors + from, from * sizeof(block_sector_t), (to - from) * sizeof(block_sector_t));
     sectors_release_at(indirect_d.sectors + from, to - from);
     if (inode->allocated <= start) sectors_release_at(indirect, 1);
   }
@@ -167,7 +167,7 @@ static void inode_undo_allocate(struct inode *inode_, size_t allocated) {
       size_t to = allocated - start;
       if (to > INDIRECT_LENGTH) to = INDIRECT_LENGTH;
       struct indirect_disk indirect_d;
-      cache_read_at(*indirect, indirect_d.sectors + from, from, to - from);
+      cache_read_at(*indirect, indirect_d.sectors + from, from * sizeof(block_sector_t), (to - from) * sizeof(block_sector_t));
       sectors_release_at(indirect_d.sectors + from, to - from);
       if (inode->allocated <= start) sectors_release_at(indirect, 1);
     }
@@ -303,15 +303,6 @@ static bool inode_extend(struct inode *inode, off_t length) {
   }
 }
 
-static void inode_print(struct inode *inode) {
-  static uint8_t buffer[75678];
-  inode_read_at(inode, buffer, inode->data.length, 0);
-  puts("");
-  printf("current %05x: ", inode->sector);
-  for (int i = 0; i < inode->data.length; i++) printf("%02x", buffer[i]);
-  puts("");
-}
-
 /* GXY's code end */
 
 /* Returns the block device sector that contains byte offset POS
@@ -351,7 +342,6 @@ inode_init (void)
 bool
 inode_create (block_sector_t sector, off_t length)
 {
-  //printf("create %05x %d\n", sector, length);
   /* old code begin */
   // struct inode_disk *disk_inode = NULL;
   /* old code end */
@@ -423,7 +413,6 @@ inode_create (block_sector_t sector, off_t length)
 struct inode *
 inode_open (block_sector_t sector)
 {
-  // printf("open %05x\n", sector);
   struct list_elem *e;
   struct inode *inode;
 
@@ -463,7 +452,6 @@ inode_open (block_sector_t sector)
 struct inode *
 inode_reopen (struct inode *inode)
 {
-  // printf("reopen %05x\n", inode->sector);
   if (inode != NULL)
     inode->open_cnt++;
   return inode;
@@ -482,7 +470,6 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode) 
 {
-  // printf("close %05x\n", inode->sector);
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
@@ -515,7 +502,6 @@ inode_close (struct inode *inode)
 void
 inode_remove (struct inode *inode) 
 {
-  // printf("remove %05x\n", inode->sector);
   ASSERT (inode != NULL);
   inode->removed = true;
 }
@@ -526,7 +512,6 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
-  //printf("read %05x %d %d \n", inode->sector, size, offset);
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   /* old code begin */
@@ -587,8 +572,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   // free (bounce);
   /* old code end */
 
-  // for (int i = 0; i < bytes_read; i++) printf("%02x", ((uint8_t *) buffer_)[i]);
-  // puts(" ok");
   return bytes_read;
 }
 
@@ -601,14 +584,6 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-  // printf("before write  ");
-  // inode_print(inode);
-  // printf("writing at [%d, %d): ", offset, offset + size);
-  // for (int i = 0; i < size; i++) printf("%02x", ((const uint8_t *) buffer_)[i]);
-  // puts("");
-  // printf("write %05x %d %d: \n", inode->sector, size, offset);
-  // for (int i = 0; i < size; i++) printf("%02x", ((const uint8_t *) buffer_)[i]);
-  // puts("");
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   /* old code begin */
@@ -684,9 +659,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   // free (bounce);
   /* old code end */
 
-  //inode_print(inode);
-  //static uint8_t buff[10000];
-  //inode_read_at(inode, buff, bytes_written, offset - bytes_written);
   return bytes_written;
 }
 

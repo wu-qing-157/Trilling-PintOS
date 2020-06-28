@@ -100,12 +100,8 @@ static void modify_donate_priority(struct thread *donator, struct thread *receiv
     modify_donate_priority(receiver, receiver->waiting, false);
 }
 
-/* Compare threads by their priority (higher smaller) */
-static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL && b != NULL);
-  struct thread *aa = list_entry(a, struct thread, elem);
-  struct thread *bb = list_entry(b, struct thread, elem);
-  return aa->priority > bb->priority;
+static bool priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  return list_entry(a, struct thread, elem)->priority < list_entry(b, struct thread, elem)->priority;
 }
 
 /* GXY's code end */
@@ -664,8 +660,9 @@ next_thread_to_run (void)
   /* old code end */
   /* GXY's code begin */
   else {
-    list_sort(&ready_list, priority_greater, NULL);
-    return list_entry(list_pop_front(&ready_list), struct thread, elem);
+    struct thread *th = list_entry(list_max(&ready_list, priority_cmp, NULL), struct thread, elem);
+    list_remove(&th->elem);
+    return th;
   }
   /* GXY's code end */
 }

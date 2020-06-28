@@ -20,7 +20,7 @@ Stack Growth||
 Memory Mapped Files||
 Accessing User Memory||
 __File Systems__||
-Indexed and Extensible Files|GXY|Almost OK
+Indexed and Extensible Files|GXY|At least Pass Test
 Subdirectories||
 Buffer Cache|GXY|Seems OK
 Synchronization||
