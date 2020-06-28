@@ -20,7 +20,7 @@ Stack Growth||
 Memory Mapped Files||
 Accessing User Memory||
 __File Systems__||
-Indexed and Extensible Files||
+Indexed and Extensible Files|GXY|Almost OK
 Subdirectories||
 Buffer Cache|GXY|Seems OK
 Synchronization||
@@ -121,9 +121,4 @@ new_line;
 new_line;
 new_line;
 /* WHO's code end */ 
-<<<<<<< HEAD
 ```
-=======
-```
-
->>>>>>> project2
