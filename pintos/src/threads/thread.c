@@ -628,6 +628,11 @@ init_thread (struct thread *t, const char *name, int priority)
     t->p_desc = NULL;
     list_init(&(t->child_process));
   #endif
+  #ifdef VM
+    t->current_esp = NULL;
+    t->mmap_count = 0;
+    list_init(&(t->mmap_list));
+  #endif
   /* GLS's code end */
 }
 

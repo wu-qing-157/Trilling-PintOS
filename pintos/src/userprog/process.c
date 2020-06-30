@@ -21,6 +21,10 @@
 /* GLS's code begin */
 #include "kernel/list.h"
 #include "syscall.h"
+#include "threads/malloc.h"
+#include "vm/frametable.h"
+#include "vm/pagetable.h"
+#include "vm/swaptable.h"
 /* GLS's code end */
 
 static thread_func start_process NO_RETURN;
@@ -284,6 +288,15 @@ process_exit (void)
   uint32_t *pd;
 
   /* GLS's code begin */
+  /* unmap all mmapped files */
+#ifdef VM
+  struct list *mmap_list = &(cur->mmap_list);
+  while (!list_empty (mmap_list)) {
+    struct list_elem *front = list_pop_front (mmap_list);
+    struct mmap_file *mmap_f = list_entry (front, struct mmap_file, elem);
+    syscall_munmap_file (mmap_f);
+  }
+#endif
   /* close all opened files */
   struct process_descriptor *p_desc = cur->p_desc;
   struct list *opened_files = &(p_desc->opened_files);
@@ -307,6 +320,7 @@ process_exit (void)
   }
 
   if (p_desc->own_file != NULL) {
+    file_allow_write (cur->p_desc->own_file);
     file_close (cur->p_desc->own_file);
   }
   
@@ -320,6 +334,10 @@ process_exit (void)
   else {
     sema_up (&(p_desc->wait_sema));
   }
+
+#ifdef VM
+  page_table_destroy(cur->page_table);
+#endif
   /* GLS's code end */  
 
   /* Destroy the current process's page directory and switch back
@@ -438,6 +456,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+
+  /* GLS's code begin */
+#ifdef VM
+  t->page_table = page_table_create();
+  if(t->page_table == NULL)
+  	goto done;
+#endif
+  /* GLS's code end */
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -620,6 +646,33 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+/* GLS's code begin */
+#ifdef VM
+  struct thread *current_thread = thread_current();
+  int page_num = (read_bytes + zero_bytes) / PGSIZE;
+  page_table_type *page_table = current_thread->page_table;
+  if (page_available_mmap (page_table, page_num, upage)) {
+    struct mmap_file *mmap_f = malloc (sizeof (struct mmap_file));
+    mmap_f->id = current_thread->mmap_count++;
+    mmap_f->addr = upage;
+    mmap_f->file = file;
+    mmap_f->file_bytes = read_bytes;
+    mmap_f->zero_bytes = zero_bytes;
+    mmap_f->ofs = ofs;
+    mmap_f->writable = writable;
+    mmap_f->static_data = writable;
+    if (page_install_mmap (page_table, page_num, mmap_f)) {
+      list_push_back (&(current_thread->mmap_list), &(mmap_f->elem));
+      return true;
+    }
+    else {
+      free (mmap_f);
+    }
+  }
+  return false;
+#endif 
+/* GLS's code end */
+
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -665,15 +718,40 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
+/* GLS's code begin */
+#ifdef VM  
+  kpage = frame_table_get_frame(PAL_USER | PAL_ZERO, PHYS_BASE - PGSIZE);
+#else
+/* GLS's code end */
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+/* GLS's code begin */
+#endif
+/* GLS's code end */
+
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+        /* GLS's code begin */
+        #ifdef VM
+              frame_table_free_frame(kpage);
+        #else
+        /* GLS's code end */
+              palloc_free_page (kpage);
+        /* GLS's code begin */
+        #endif
+        /* GLS's code end */
     }
+
+/* GLS's code begin */   
+#ifdef VM
+   if (success)
+     frame_set_not_referenced (kpage);
+#endif
+/* GLS's code end */
+
   return success;
 }
 
@@ -689,10 +767,21 @@ setup_stack (void **esp)
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
+/* GLS's code begin */
+#ifdef VM
+  return page_table_install_frame(upage, kpage, writable);
+#else
+/* GLS's code end */
+
   struct thread *t = thread_current ();
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+
+/* GLS's code begin */          
+#endif
+/* GLS's code end */
+
 }

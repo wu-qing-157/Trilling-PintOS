@@ -38,6 +38,14 @@
 #include "filesys/fsutil.h"
 #endif
 
+/* GLS's code begin */
+#ifdef VM
+#include "vm/frametable.h"
+#include "vm/pagetable.h"
+#include <vm/swaptable.h>
+#endif
+/* GLS's code end */
+
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -126,6 +134,14 @@ pintos_init (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+
+/* GLS's code begin */
+#ifdef VM
+  frame_table_init();
+  page_table_lock_init();
+  swap_init();
+#endif
+/* GLS's code end */
 
   printf ("Boot complete.\n");
   
