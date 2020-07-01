@@ -8,6 +8,12 @@
 #include "filesys/directory.h"
 #include "filesys/cache.h"
 
+/* yy's code begin */
+#include "threads/thread.h"
+#include "user/syscall.h"
+#include "lib/string.h"
+/* yy's code end */
+
 /* Partition that contains the file system. */
 struct block *fs_device;
 
@@ -54,6 +60,7 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+  /*
   block_sector_t inode_sector = 0;
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
@@ -64,7 +71,30 @@ filesys_create (const char *name, off_t initial_size)
     free_map_release (inode_sector, 1);
   dir_close (dir);
 
-  return success;
+  return success;*/
+
+  /* yy's code begin */
+  struct dir *dir;
+  char *file_name = malloc(READDIR_MAX_LEN + 1);
+  bool is_dir;
+
+  if (strlen(name) > 0 && parse_path(name, &dir, &file_name, &is_dir)) {
+    ASSERT(dir != NULL);
+    ASSERT(file_name != NULL);
+    if (is_dir) {
+      dir_close(dir);
+      free(file_name);
+      return false;
+    }
+    bool suc = subfile_create(dir, file_name, initial_size);
+    dir_close(dir);
+    free(file_name);
+    return suc;
+  } else {
+    free(file_name);
+    return false;
+  }
+  /* yy's code end */
 }
 
 /* Opens the file with the given NAME.
@@ -75,6 +105,42 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  /* yy's code begin */
+  struct dir *dir;
+  char *file_name = malloc(READDIR_MAX_LEN + 1);
+  bool is_dir;
+
+  if (strlen(name) > 0 && is_rootpath(name)) {
+    struct file* file = file_open(inode_open(ROOT_DIR_SECTOR));
+    set_file_dir(file, dir_open_root());
+    free(file_name);
+    return file;
+  } else if (strlen(name) > 0 && parse_path(name, &dir, &file_name, &is_dir)) {
+    ASSERT(dir != NULL);
+    ASSERT(file_name != NULL);
+    
+    struct file* tmp;
+    if (is_dir) {
+      struct dir* target_dir;
+      target_dir = subdir_lookup(dir, file_name);
+      tmp = file_open(inode_reopen(dir_get_inode(target_dir))); // I did not understand.
+      set_file_dir(tmp, dir_reopen(dir));
+      dir_close(target_dir);
+    } else {
+      struct file* target_file;
+      target_file = subfile_lookup(dir, file_name);
+      tmp = target_file;
+    }
+    dir_close(dir);
+    free(file_name);
+    return tmp;
+  } else {
+    free(file_name);
+    return NULL;
+  }
+  /* yy's code end */
+
+  /*
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
 
@@ -83,6 +149,7 @@ filesys_open (const char *name)
   dir_close (dir);
 
   return file_open (inode);
+  */
 }
 
 /* Deletes the file named NAME.
@@ -92,11 +159,36 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
+  struct dir *dir;
+  char *file_name = malloc(READDIR_MAX_LEN + 1);
+  bool is_dir;
+
+  if (strlen(name) > 0 && parse_path(name, &dir, &file_name, &is_dir)) {
+    ASSERT(dir != NULL);
+    ASSERT(file_name != NULL);
+    if (is_dir) {
+      bool suc = subdir_delete(dir, file_name);
+      dir_close(dir);
+      free(file_name);
+      return suc;
+    } else {
+      bool suc = /* subdir_delete(dir, file_name) ||*/ subfile_delete(dir, file_name); // What's the first half ?
+      dir_close(dir);
+      free(file_name);
+      return suc;
+    }
+  } else {
+    free(file_name);
+    return false;
+  }
+  
+  /*
   struct dir *dir = dir_open_root ();
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
 
   return success;
+  */
 }
 
 /* Formats the file system. */
@@ -110,3 +202,80 @@ do_format (void)
   free_map_close ();
   printf ("done.\n");
 }
+
+/* yy's code begin */
+
+/* Check whether a path is rootpath. */
+// NOTEHERE: this function did not deal with such symbols as .., ., or //
+bool
+is_rootpath(const char* path) {
+  if (path == NULL) return false;
+  if (path[0] == '/' && path[1] == '\0') return true;
+  return false;
+}
+
+/* Check whether name of a file is of valid length
+   and does not contain '/' */
+bool
+check_name(const char* name) {
+  if (name == NULL) return false;
+  for (int i = 0; i < READDIR_MAX_LEN + 1; ++i) {
+    if (name[i] == '\0') return true;
+    if (name[i] == '/') return false;
+  }
+  return false;
+}
+
+
+/* Readin a path(not a root path), judge whether it is a directory or a file.
+   Also find its parent directory and its name. */
+// NOTEHERE: this function did not deal with such symbols as .. . //
+// and I am curious about where they are handeled in ymt's code
+bool
+parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir) {
+  *is_dir = false;
+
+  if (is_rootpath(path)) 
+    return false;
+
+  int l = strlen(path);
+  if (l == 0) return false;
+  if (l > 1 && path[l - 1] == '/') {
+    *is_dir = true;
+  }
+
+  if (path[0] == '/')
+    *parent_dir = dir_open_root();
+  else
+    *parent_dir = dir_reopen(thread_current()->current_dir);
+
+  char* cpy_path = malloc(l + 1);
+  strlcpy(cpy_path, path, l + 1);
+
+  char* ptr;
+  char* result = strtok_r(cpy_path, "/", &ptr);
+  while (result != NULL) {
+    if (!check_filedir_name(result)) {
+      *is_dir = false;
+      free(cpy_path);
+      return false;
+    }
+    char* next = strtok_r(NULL, "/", &ptr);
+    if (next == NULL) {
+      strlcpy(*name, result, READDIR_MAX_LEN + 1);
+      break;      
+    } else {
+      struct dir* tmp = *parent_dir;
+      *parent_dir = subdir_lookup(*parent_dir, result);
+      dir_close(tmp);
+      if (*parent_dir == NULL){
+        free(cpy_path);
+        return false;
+      }
+    }
+  }
+  free(cpy_path);
+  return true;
+}
+
+/* yy's code end */

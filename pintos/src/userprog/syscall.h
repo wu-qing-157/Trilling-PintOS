@@ -14,6 +14,10 @@ struct file_descriptor {
     fid_t id;
     struct file *file;
     struct list_elem elem;
+    
+    /* yy's code begin */
+    struct dir* dir;
+    /* yy's code end */
 };
 
 void syscall_close_file (struct file_descriptor* f_desc);

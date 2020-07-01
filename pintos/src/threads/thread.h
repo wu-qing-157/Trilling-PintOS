@@ -126,6 +126,10 @@ struct thread
     int recent_cpu;
 
     /* GXY's code end */
+
+    /* yy's code begin */
+    struct dir* current_dir;
+    /* yy's code end */
   };
 
 /* If false (default), use round-robin scheduler.

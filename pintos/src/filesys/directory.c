@@ -5,6 +5,14 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+/* yy's code begin */
+#include "filesys/free-map.h"
+#include "filesys/file.h"
+#include "filesys/inode.h"
+#include "userprog/syscall.h"
+#include "threads/thread.h"
+/* yy's code end */
+
 
 /* A directory. */
 struct dir 
@@ -234,3 +242,121 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/* yy's code begin */
+/* Lookup a subdirectory and open. */
+struct dir*
+subdir_lookup(struct dir* current_dir, char* subdir_name) {
+  ASSERT(current_dir != NULL)
+  ASSERT(subdir_name != NULL)
+  if (strlen(subdir_name) == 0)
+    return NULL;
+  struct inode* inode = NULL;
+  bool suc = dir_lookup(current_dir, subdir_name, &inode);
+  if (!suc || inode == NULL)
+    return NULL;
+  if (!inode_isdir(inode)) { // not a directory
+    inode_close(inode);
+    return NULL;
+  }
+  return dir_open(inode);
+}
+
+/* Lookup a subfile and open. */
+struct dir*
+subfile_lookup(struct dir* current_dir, char* file_name) {
+  ASSERT(current_dir != NULL)
+  ASSERT(file_name != NULL)
+  if (strlen(file_name) == 0)
+    return NULL;
+  struct inode* inode = NULL;
+  bool suc = dir_lookup(current_dir, file_name, &inode);
+  if (!suc || inode == NULL)
+    return NULL;
+  if (inode_isdir(inode)) { // is a directory
+    inode_close(inode);
+    return NULL;
+  }
+  struct file* file = file_open(inode);
+  set_file_dir(file, dir_reopen(current_dir));
+  return file;
+}
+
+/* Create a file in a given directory. */
+bool
+subfile_create(struct dir* dir, char* file_name, off_t initial_size) {
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  block_sector_t block_sector = -1;
+  bool success = (dir != NULL
+                  && free_map_allocate(1, &block_sector)
+                  && inode_create(block_sector, initial_size)
+                  && dir_add(dir, file_name, block_sector));
+  if (!success && block_sector != -1)
+    free_map_release(block_sector, 1);
+  return success;
+}
+
+/* Delete a file in a directory */
+bool
+subfile_delete(struct dir* current_dir, char* file_name) {
+  if (strlen(file_name) == 0) return false;
+  struct inode* inode = NULL;
+  bool suc = dir_lookup(current_dir, file_name, &inode);
+  if (!suc || inode == NULL)
+    return false;
+  if (inode_isdir(inode)) { // is a directory
+    inode_close(inode);
+    return false;
+  } else {
+    inode_close(inode);
+    return dir_remove(current_dir, file_name);
+  }
+}
+
+/* Delete a subdirectory in a directory */
+bool
+subdir_delete(struct dir* current_dir, char* dir_name) {
+  if (strlen(dir_name) == 0) return false;
+  struct inode* inode = NULL;
+  bool suc = dir_lookup(current_dir, dir_name, &inode);
+  if (!suc || inode == NULL)
+    return false;
+  if (!inode_isdir(inode)) { // not a directory
+    inode_close(inode);
+    return false;
+  } else if (inode_get_inumber(inode) == inode_get_inumber(dir_get_inode(thread_current()->current_dir))) {
+    inode_close(inode);
+    return false;
+  } else if (inode_get_opencnt(inode) > 1) {
+    inode_close(inode);
+    return false;
+  } else {
+    struct dir* cpy_dir = dir_open(inode); // I don't quite get the meaning of copying dir.
+    char* buffer = malloc(NAME_MAX + 1);
+    ASSERT(buffer != NULL)
+    if (dir_readdir(cpy_dir, buffer)) { // The directory contains other entries.
+      dir_close(cpy_dir);
+      free(buffer);
+      return false;
+    }
+    dir_close(cpy_dir);
+    free(buffer);
+    return dir_remove(current_dir, dir_name);
+  }
+}
+
+/* Judge whether an inode points to a directory. */
+bool 
+inode_isdir(struct inode* inode) {
+  // Problem here: where is isdir set ?
+  return inode_isdir(inode);
+}
+
+/* Judge whether a file_descriptor is a dir file. */
+bool
+is_dirfile(struct file_descriptor* f_desc) {
+  return inode_isdir(file_get_inode(f_desc->file));
+}
+/* yy's code end */

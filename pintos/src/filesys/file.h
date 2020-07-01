@@ -5,6 +5,10 @@
 
 struct inode;
 
+/* yy's code begin */
+void set_file_dir(struct file* file, const struct dir* dir);
+/* yy's code end */
+
 /* Opening and closing files. */
 struct file *file_open (struct inode *);
 struct file *file_reopen (struct file *);

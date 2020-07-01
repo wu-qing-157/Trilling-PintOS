@@ -20,6 +20,11 @@
 #define SYSCALL_STDOUT_FILENO 1
 /* GLS's code end */
 
+/* yy's code begin */
+#include "filesys/directory.h"
+#include "filesys/inode.h"
+/* yy's code end */
+
 static void syscall_handler (struct intr_frame *);
 
 /* GLS's code begin */
@@ -190,6 +195,65 @@ syscall_handler (struct intr_frame *f UNUSED)
     syscall_close (fd);
     break;
   }
+
+  /* yy's code begin */
+  case SYS_CHDIR: {
+    const char *dirname;
+    read_user (f->esp + sizeof (int), &dirname, sizeof (dirname));
+    if (is_valid_user_string (dirname) && strlen(dirname) != 0) {
+      f->eax = syscall_chdir(dirname);
+    } else {
+      f->eax = false;
+    }
+    break;
+  }
+
+  case SYS_MKDIR: {
+    const char *dirname;
+    read_user (f->esp + sizeof (int), &dirname, sizeof (dirname));
+    if (is_valid_user_string (dirname) && strlen(dirname) != 0) {
+      f->eax = syscall_mkdir(dirname);
+    } else {
+      f->eax = false;
+    }
+    break;
+  }
+
+  case SYS_READDIR: {
+    int fd;
+    void *buffer;
+    read_user (f->esp + sizeof (int), &fd, sizeof (fd));
+    read_user (f->esp + sizeof (int) + sizeof (fd), &buffer, sizeof (buffer));
+    if (fd != 0 && fd != 1 && is_valid_user_buffer (buffer, READDIR_MAX_LEN + 1)) {
+      f->eax = syscall_readdir(fd, buffer);
+    } else {
+      f->eax = false;
+    }
+    break;
+  }
+
+  case SYS_ISDIR: {
+    int fd;
+    read_user (f->esp + sizeof (int), &fd, sizeof (fd));
+    if (fd != 0 && fd != 1) {
+      f->eax = syscall_isdir(fd);
+    } else {
+      f->eax = false;
+    }
+    break;
+  }
+
+  case SYS_INUMBER: {
+    int fd;
+    read_user (f->esp + sizeof (int), &fd, sizeof (fd));
+    if (fd != 0 && fd != 1) {
+      f->eax = syscall_inumber(fd);
+    } else {
+      f->eax = false;
+    }
+    break;
+  }
+  /*yy's code end*/
 
   default:
     break;
@@ -560,3 +624,93 @@ exit_forcely (void) {
   syscall_exit (-1);    
 }
 /* GLS's code end */
+
+/* yy's code begin */
+static bool
+syscall_chdir(const char *dir) {
+  ASSERT(dir != NULL)
+  struct thread *cur_thread = thread_current();
+  if (is_rootpath(dir)) {
+    dir_close(cur_thread->current_dir);
+    cur_thread->current_dir = dir_open_root();
+    return true;
+  }
+  else {
+    struct dir* target_dir;
+    char *name = malloc(READDIR_MAX_LEN + 1);
+    ASSERT(name != NULL)
+    bool is_dir;
+    if (parse_path(dir, &target_dir, &name, &is_dir)) {
+      ASSERT(target_dir != NULL)
+      ASSERT(name != NULL)
+      struct dir *res = subdir_lookup(target_dir, name);
+      if (res != NULL) {
+        dir_close(cur_thread->current_dir);
+        dir_close(target_dir);
+        cur_thread->current_dir = res;
+        free(name);
+        return true;
+      }
+      else {
+        dir_close(target_dir);
+        free(name);
+        return false;
+      }
+    }
+    else{
+      free(name);
+      return false;
+    }
+    free(name);
+  }
+}
+
+static bool
+syscall_mkdir(const char *dir) {
+  struct dir* target_dir;
+  char *pure_name = malloc(READDIR_MAX_LEN + 1);
+  bool is_dir;
+  ASSERT(dir != NULL)
+  ASSERT(pure_name != NULL)
+  if(!is_rootpath(dir) && parse_path(dir, &target_dir, &pure_name, &is_dir))
+  {
+    ASSERT(target_dir != NULL)
+    ASSERT(pure_name != NULL)
+    bool suc = subdir_create(target_dir, pure_name);
+    dir_close(target_dir);
+    free(pure_name);
+    return suc;
+  }
+  else
+    free(pure_name);
+    return false;
+}
+
+static bool
+syscall_readdir(int fd, void* buffer) {
+  struct thread* current_thread = thread_current();
+  struct file_descriptor* f_desc = find_file(current_thread, fd);
+
+  if (f_desc != NULL && is_dirfile(f_desc)) {
+    return dir_readdir(f_desc->dir, buffer);
+    // Problem here: I don't know where file_descripter.dir should be set.
+  } else {
+    return false;
+  }
+}
+
+static bool
+syscall_isdir(int fd) {
+  struct thread* current_thread = thread_current();
+  struct file_descriptor* f_desc = find_file(current_thread, fd);
+  return f_desc != NULL && is_dirfile(f_desc);
+}
+
+
+static bool
+syscall_inumber(int fd) {
+  struct thread* current_thread = thread_current();
+  struct file_descriptor* f_desc = find_file(current_thread, fd);
+  return inode_get_inumber(file_get_inode(f_desc->file));
+}
+/* yy's code end */

@@ -18,7 +18,14 @@ struct inode_disk
     block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    /* yy's code begin */
+    bool is_dir;
+    // I'm not sure whether the length is correct
+    
+    //uint32_t unused[125];               /* Not used. */
+    uint32_t unused[124];               /* Not used. */
+    
+    /* yy's code end */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -39,6 +46,16 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
   };
+
+/* yy's code begin */
+int inode_get_opencnt(const struct inode * inode){
+  return inode->open_cnt;
+}
+
+bool inode_isdir(const struct inode* inode) {
+  return inode->data.is_dir;
+}
+/* yy's code end */
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.

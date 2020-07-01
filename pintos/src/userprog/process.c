@@ -534,6 +534,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
+  /* yy's code begin */
+  t->current_dir = file->dir;
+  /* yy's code end */
+
   /* GLS's code begin */
   /* Task 5: Denying Writes to Executables. */
   file_deny_write (file);

@@ -2,6 +2,9 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+/* yy's code begin */
+#include "filesys/directory.h"
+/* yy's code end */
 
 /* An open file. */
 struct file 
@@ -9,7 +12,15 @@ struct file
     struct inode *inode;        /* File's inode. */
     off_t pos;                  /* Current position. */
     bool deny_write;            /* Has file_deny_write() been called? */
+
+    /* yy's code begin */
+    struct dir* dir;
+    /* yy's code end */
   };
+
+void set_file_dir(struct file* file, const struct dir* dir) {
+  file->dir = dir;
+}
 
 /* Opens a file for the given INODE, of which it takes ownership,
    and returns the new file.  Returns a null pointer if an
@@ -38,7 +49,13 @@ file_open (struct inode *inode)
 struct file *
 file_reopen (struct file *file) 
 {
-  return file_open (inode_reopen (file->inode));
+  /* yy's code begin */
+  struct file* ret = file_open (inode_reopen (file->inode));
+  ret->dir = dir_reopen(file->dir);
+  return ret;
+  /* yy's code end */
+  
+  //return file_open (inode_reopen (file->inode));
 }
 
 /* Closes FILE. */
@@ -48,6 +65,9 @@ file_close (struct file *file)
   if (file != NULL)
     {
       file_allow_write (file);
+      /* yy's code begin */
+      dir_close(file->dir);
+      /* yy's code end */
       inode_close (file->inode);
       free (file); 
     }
