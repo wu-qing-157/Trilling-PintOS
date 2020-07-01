@@ -15,10 +15,10 @@ Accessing User Memory|GLS|Pass Test
 System Calls|GLS|Pass Test
 Denying Writes to Executables|GLS|Pass Test
 __Virtual Memory__||
-Paging|FLY|Pass Test with original scheduler
-Stack Growth|FLY|Pass Test with original scheduler
-Memory Mapped Files|GLS|Pass Test with original scheduler
-Accessing User Memory|FLY|Pass Test with original scheduler
+Paging|FLY|Pass Test
+Stack Growth|FLY|Pass Test
+Memory Mapped Files|GLS|Pass Test
+Accessing User Memory|FLY|Pass Test
 __File Systems__||
 Indexed and Extensible Files|GXY|At least Pass Test
 Subdirectories||
