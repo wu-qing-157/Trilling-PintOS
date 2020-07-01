@@ -124,8 +124,8 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   /* old code begin */
   // if (!list_empty (&sema->waiters)) 
-  //   thread_unblock (list_entry (list_pop_front (&sema->waiters),
-  //                               struct thread, elem));
+    // thread_unblock (list_entry (list_pop_front (&sema->waiters),
+                                // struct thread, elem));
   /* old code end */
   sema->value++;
   /* GXY's code begin */

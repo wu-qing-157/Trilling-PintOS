@@ -348,7 +348,7 @@ thread_block (void)
    update other data. */
 void
 thread_unblock (struct thread *t) 
-{//printf("thread_unblock: %s\n", t->name);
+{
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -357,15 +357,15 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   /* GXY's code begin */
-  if (t->waiting != NULL) modify_donate_priority(t, t->waiting, true);
+  if (t->waiting != NULL) {
+    modify_donate_priority(t, t->waiting, true);
+    t->waiting = NULL;
+  }
   /* GXY's code end */
   t->status = THREAD_READY;
   intr_set_level (old_level);
   /* GXY's code begin */
-  if (thread_current()->priority < t->priority) {
-    if (intr_context()) intr_yield_on_return();
-    else thread_yield();
-  }
+  if (!intr_context() && thread_current()->priority < t->priority) thread_yield();
   /* GXY's code end */
 }
 
