@@ -3,10 +3,15 @@
 
 #include "filesys/off_t.h"
 
+/* yy's code begin */
+#include "filesys/directory.h"
+/* yy's code end */
+
 struct inode;
 
 /* yy's code begin */
-void set_file_dir(struct file* file, const struct dir* dir);
+void file_set_dir(struct file* file, const struct dir* dir);
+struct dir* file_get_dir(struct file* file);
 /* yy's code end */
 
 /* Opening and closing files. */

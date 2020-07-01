@@ -52,6 +52,14 @@ static bool is_valid_user_buffer (const void* buffer, off_t size);
 static void exit_forcely (void);
 /* GLS's code end */
 
+/* yy's code begin */
+static bool syscall_chdir(const char *dir);
+static bool syscall_mkdir(const char *dir);
+static bool syscall_readdir(int fd, void* buffer);
+static bool syscall_isdir(int fd);
+static bool syscall_inumber(int fd);
+/* yy's code end */
+
 
 /* GLS's code begin */
 /* As suggested by 4.3.4, only a user process can call into file system at once.

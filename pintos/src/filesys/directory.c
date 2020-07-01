@@ -244,6 +244,26 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 }
 
 /* yy's code begin */
+/* Lookup a subfile and open. */
+struct file*
+subfile_lookup(struct dir* dir, char* file_name) {
+  ASSERT(dir != NULL)
+  ASSERT(file_name != NULL)
+  if (strlen(file_name) == 0)
+    return NULL;
+  struct inode* inode = NULL;
+  bool suc = dir_lookup(dir, file_name, &inode);
+  if (!suc || inode == NULL)
+    return NULL;
+  if (inode_isdir(inode)) { // is a directory
+    inode_close(inode);
+    return NULL;
+  }
+  struct file* file = file_open(inode);
+  file_set_dir(file, dir_reopen(dir));
+  return file;
+}
+
 /* Lookup a subdirectory and open. */
 struct dir*
 subdir_lookup(struct dir* current_dir, char* subdir_name) {
@@ -262,27 +282,7 @@ subdir_lookup(struct dir* current_dir, char* subdir_name) {
   return dir_open(inode);
 }
 
-/* Lookup a subfile and open. */
-struct dir*
-subfile_lookup(struct dir* current_dir, char* file_name) {
-  ASSERT(current_dir != NULL)
-  ASSERT(file_name != NULL)
-  if (strlen(file_name) == 0)
-    return NULL;
-  struct inode* inode = NULL;
-  bool suc = dir_lookup(current_dir, file_name, &inode);
-  if (!suc || inode == NULL)
-    return NULL;
-  if (inode_isdir(inode)) { // is a directory
-    inode_close(inode);
-    return NULL;
-  }
-  struct file* file = file_open(inode);
-  set_file_dir(file, dir_reopen(current_dir));
-  return file;
-}
-
-/* Create a file in a given directory. */
+/* Create a subfile in a given directory. */
 bool
 subfile_create(struct dir* dir, char* file_name, off_t initial_size) {
   ASSERT(file_name != NULL);
@@ -298,12 +298,28 @@ subfile_create(struct dir* dir, char* file_name, off_t initial_size) {
   return success;
 }
 
+/* Create a subdir in a given dir. */
+bool
+subdir_create(struct dir* dir, char* dir_name) {
+  ASSERT(dir_name != NULL);
+  if (strlen(dir_name) == 0)
+    return false;
+  block_sector_t block_sector = -1;
+  bool success = (dir != NULL
+                  && free_map_allocate(1, &block_sector)
+                  && dir_create(block_sector, 0)
+                  && dir_add(dir, dir_name, block_sector));
+  if (!success && block_sector != -1)
+    free_map_release(block_sector, 1);
+  return success;
+}
+
 /* Delete a file in a directory */
 bool
-subfile_delete(struct dir* current_dir, char* file_name) {
+subfile_delete(struct dir* dir, char* file_name) {
   if (strlen(file_name) == 0) return false;
   struct inode* inode = NULL;
-  bool suc = dir_lookup(current_dir, file_name, &inode);
+  bool suc = dir_lookup(dir, file_name, &inode);
   if (!suc || inode == NULL)
     return false;
   if (inode_isdir(inode)) { // is a directory
@@ -311,7 +327,7 @@ subfile_delete(struct dir* current_dir, char* file_name) {
     return false;
   } else {
     inode_close(inode);
-    return dir_remove(current_dir, file_name);
+    return dir_remove(dir, file_name);
   }
 }
 
@@ -345,13 +361,6 @@ subdir_delete(struct dir* current_dir, char* dir_name) {
     free(buffer);
     return dir_remove(current_dir, dir_name);
   }
-}
-
-/* Judge whether an inode points to a directory. */
-bool 
-inode_isdir(struct inode* inode) {
-  // Problem here: where is isdir set ?
-  return inode_isdir(inode);
 }
 
 /* Judge whether a file_descriptor is a dir file. */

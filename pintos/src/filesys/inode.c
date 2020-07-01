@@ -53,6 +53,7 @@ int inode_get_opencnt(const struct inode * inode){
 }
 
 bool inode_isdir(const struct inode* inode) {
+  // Problem here: where is isdir set ?
   return inode->data.is_dir;
 }
 /* yy's code end */

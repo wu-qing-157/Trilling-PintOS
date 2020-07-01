@@ -112,7 +112,7 @@ filesys_open (const char *name)
 
   if (strlen(name) > 0 && is_rootpath(name)) {
     struct file* file = file_open(inode_open(ROOT_DIR_SECTOR));
-    set_file_dir(file, dir_open_root());
+    file_set_dir(file, dir_open_root());
     free(file_name);
     return file;
   } else if (strlen(name) > 0 && parse_path(name, &dir, &file_name, &is_dir)) {
@@ -124,7 +124,7 @@ filesys_open (const char *name)
       struct dir* target_dir;
       target_dir = subdir_lookup(dir, file_name);
       tmp = file_open(inode_reopen(dir_get_inode(target_dir))); // I did not understand.
-      set_file_dir(tmp, dir_reopen(dir));
+      file_set_dir(tmp, dir_reopen(dir));
       dir_close(target_dir);
     } else {
       struct file* target_file;
@@ -255,7 +255,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
   char* ptr;
   char* result = strtok_r(cpy_path, "/", &ptr);
   while (result != NULL) {
-    if (!check_filedir_name(result)) {
+    if (!check_name(result)) {
       *is_dir = false;
       free(cpy_path);
       return false;

@@ -18,8 +18,13 @@ struct file
     /* yy's code end */
   };
 
-void set_file_dir(struct file* file, const struct dir* dir) {
+void file_set_dir(struct file* file, const struct dir* dir) {
   file->dir = dir;
+}
+
+struct dir*
+file_get_dir(struct file* file) {
+  return file->dir;
 }
 
 /* Opens a file for the given INODE, of which it takes ownership,
