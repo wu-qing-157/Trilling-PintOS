@@ -14,8 +14,10 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "vm/pagetable.h"
 #define SYSCALL_STDIN_FILENO 0
 #define SYSCALL_STDOUT_FILENO 1
 /* GLS's code end */
@@ -49,7 +51,13 @@ static void read_user (void *uaddr, void *dest, unsigned size);
 static bool is_valid_uaddr (void *uaddr);
 static bool is_valid_user_string (const char *str);
 static bool is_valid_user_buffer (const void* buffer, off_t size);
-static void exit_forcely (void);
+
+
+#ifdef VM
+static mmapid_t syscall_mmap(int fd, void *addr);
+static void syscall_munmap(mmapid_t id);
+static struct mmap_file* find_mmap_file (struct thread *t, mmapid_t id);
+#endif
 /* GLS's code end */
 
 /* yy's code begin */
@@ -86,8 +94,13 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* old code end */
 
   /* GLS's code begin */
+#ifdef VM  
+  thread_current()->current_esp = f->esp;
+#endif   
+
   int syscall_number = 0;
   read_user(f->esp, &syscall_number, sizeof (int));
+  // printf ("syscall_number  %d\n", syscall_number);
   switch (syscall_number)
   {
   case SYS_HALT: {
@@ -262,6 +275,25 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   }
   /*yy's code end*/
+  #ifdef VM
+  case SYS_MMAP: {
+    int fd;
+    void *addr;
+    read_user (f->esp + sizeof (int), &fd, sizeof (fd));
+    read_user (f->esp + sizeof (int) + sizeof (int), &addr, sizeof (addr));
+   // if (is_valid_uaddr (addr)) {
+      f->eax = syscall_mmap (fd, addr);
+    //}
+    break;
+  }
+
+  case SYS_MUNMAP: {
+    mmapid_t id;
+    read_user (f->esp + sizeof (int), &id, sizeof (id));
+    syscall_munmap (id);
+    break;
+  }
+  #endif
 
   default:
     break;
@@ -390,6 +422,7 @@ syscall_read (int fd, void *buffer, off_t size) {
   else if (fd == SYSCALL_STDIN_FILENO) {
     int i;
     for (i = 0; i < size; ++i) {
+    //  printf ("put_user\n");
       put_user ((uint8_t*) buffer + i, input_getc());
       return_value = i + 1;
     }
@@ -578,12 +611,22 @@ an address is a valid user virtuall address or not */
 /* case 3 : UADDR is a pointer to unmapped virtual address. */
 static bool
 is_valid_uaddr (void *uaddr) {
-  if (uaddr == NULL                                         || /* case 1 */
-    !is_user_vaddr (uaddr)                                  || /* case 2 */
-    pagedir_get_page(thread_current()->pagedir, uaddr) == NULL /* case 3*/) { 
-      exit_forcely ();
+  if (uaddr != NULL /* case 1 */ && is_user_vaddr (uaddr)  /* case 2 */) {
+    /* case 3*/
+#ifdef VM
+   //printf ("syscall page fault  %0x %0x\n", uaddr, thread_current()->current_esp);
+    if ( page_search_with_lock(thread_current()->page_table, pg_round_down(uaddr)) != NULL
+      || page_fault_handler(uaddr, false, thread_current()->current_esp) ) {
+        return true;
+      }
+#else
+    if (pagedir_get_page(thread_current()->pagedir, uaddr) != NULL) { 
+      return true;
+    }
+#endif
   }
-  return true;
+  exit_forcely ();
+  return false;
 }
 /* GLS's code end */
 
@@ -624,7 +667,7 @@ is_valid_user_buffer (const void* buffer, off_t size) {
 
 /* GLS's code begin */
 /* release the filesys lock and exit with -1. */
-static void 
+void 
 exit_forcely (void) {
   if (lock_held_by_current_thread (&syscall_filesys_lock)) {
     lock_release (&syscall_filesys_lock);
@@ -722,3 +765,199 @@ syscall_inumber(int fd) {
   return inode_get_inumber(file_get_inode(f_desc->file));
 }
 /* yy's code end */
+
+/* GLS's code begin */
+#ifdef VM
+/* Check if can install PAGE_NUM pages stared at ADDR in PAGE_TABLE */
+bool 
+page_available_mmap (page_table_type *page_table, int page_num, void *addr) {
+  int i;
+  for (i = 0; i < page_num; ++i, addr += PGSIZE) {
+    if (!page_table_available (page_table, addr)) {
+      return false;
+    }
+  }
+  return true;
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+/* Install PAGE_NUM pages stared at ADDR in PAGE_TABLE */
+bool 
+page_install_mmap (page_table_type *page_table, int page_num, struct mmap_file *mmap_f) {
+  int i;
+  void *addr = mmap_f->addr;
+  for (i = 0; i < page_num; ++i, addr += PGSIZE) { 
+    //printf("page_table_install_file:  page_table:%0x  addr:%0x\n", page_table, addr);
+    if (!page_table_install_file (page_table, mmap_f, addr)) {
+      return false;
+    }
+  }
+  return true;
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+static mmapid_t 
+syscall_mmap (int fd, void* addr) {
+  if (addr == NULL || ((uint32_t) addr & PGMASK) || fd == 0 || fd == 1) {
+    return -1;
+  }
+
+  lock_acquire (&syscall_filesys_lock);  
+
+  struct thread *current_thread = thread_current();
+  struct file_descriptor *file_d = find_file (current_thread, fd);
+  struct file* reopened_file = NULL;
+  uint32_t file_bytes = 0;
+  if (file_d != NULL && file_d->file != NULL) {
+    reopened_file = file_reopen (file_d->file);  
+    if (reopened_file != NULL) {
+      file_bytes = file_length (reopened_file);
+    }
+  }
+  if (file_d == NULL || file_d->file == NULL || reopened_file == NULL || file_bytes == 0) {
+   lock_release (&syscall_filesys_lock);
+    return -1;  
+  }
+
+  int page_num = (file_bytes + PGSIZE - 1) / PGSIZE;
+  page_table_type *page_table = current_thread->page_table;
+  if (page_available_mmap (page_table, page_num, addr)) {
+    struct mmap_file *mmap_f = malloc (sizeof (struct mmap_file));
+    mmap_f->id = current_thread->mmap_count++;
+    mmap_f->addr = addr;
+    mmap_f->file = reopened_file;
+    mmap_f->file_bytes = file_bytes;
+    mmap_f->zero_bytes = 0;
+    mmap_f->ofs = 0;
+    mmap_f->writable = true;
+    mmap_f->static_data = false;
+    if (page_install_mmap (page_table, page_num, mmap_f)) {
+      list_push_back (&(current_thread->mmap_list), &(mmap_f->elem));
+      lock_release (&syscall_filesys_lock);
+      return mmap_f->id;
+    }
+    else {
+      free (mmap_f);
+    }
+  }
+
+  lock_release (&syscall_filesys_lock);
+  return -1;
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+static void
+syscall_munmap(mmapid_t id) {
+  struct thread *current_thread = thread_current();
+  struct mmap_file *mmap_f = find_mmap_file (current_thread, id);
+  if (mmap_f != NULL) {
+   lock_acquire (&syscall_filesys_lock);
+    int i, page_num = (mmap_f->file_bytes + mmap_f->zero_bytes + PGSIZE - 1) / PGSIZE;
+    void *addr = mmap_f->addr;  
+    for (i = 0; i < page_num; ++i, addr += PGSIZE) {
+      page_table_unstall_file(current_thread->page_table, addr);
+    }
+    file_close (mmap_f->file);
+    list_remove(&(mmap_f->elem));
+    free (mmap_f);
+   lock_release (&syscall_filesys_lock);
+  }
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+void
+syscall_munmap_file(struct mmap_file *mmap_f) {
+  struct thread* current_thread = thread_current();
+  lock_acquire (&syscall_filesys_lock);
+  int i, page_num = (mmap_f->file_bytes + mmap_f->zero_bytes + PGSIZE - 1) / PGSIZE;
+  void *addr = mmap_f->addr;  
+  for (i = 0; i < page_num; ++i, addr += PGSIZE) {
+    page_table_unstall_file(current_thread->page_table, addr);
+  }
+  if (mmap_f->file != current_thread->p_desc->own_file)
+   file_close (mmap_f->file);
+  list_remove(&(mmap_f->elem));
+  free (mmap_f);
+  lock_release (&syscall_filesys_lock);
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+void 
+read_page_from_file (struct mmap_file *mmap_f, void *upage, void *kpage) {
+  void *file_end = mmap_f->addr + mmap_f->file_bytes;
+  void *zero_end = file_end + mmap_f->zero_bytes;
+ //bool held = lock_held_by_current_thread (&syscall_filesys_lock);
+ //if (!held)
+ //  lock_acquire (&syscall_filesys_lock);
+  if (upage < file_end) {
+    if (file_end - upage < PGSIZE) {
+      /* read page from the last page of file. */
+      int last_page = mmap_f->file_bytes % PGSIZE;
+      file_read_at (mmap_f->file, kpage, last_page, mmap_f->ofs + upage - mmap_f->addr);
+      memset (kpage + last_page, 0, PGSIZE - last_page);
+    }
+    else {
+      file_read_at (mmap_f->file, kpage, PGSIZE, mmap_f->ofs + upage - mmap_f->addr);
+    }
+  } 
+  else if (mmap_f->zero_bytes > 0) {
+    if (upage < zero_end) {
+      memset (kpage, 0, PGSIZE);
+    }
+  }
+ // if (!held)
+ //  lock_release (&syscall_filesys_lock);
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+void write_page_to_file (struct mmap_file *mmap_f, void *upage, void *kpage) {
+  if (mmap_f->writable) {
+    void *file_end = mmap_f->addr + mmap_f->file_bytes;
+   //bool held = lock_held_by_current_thread (&syscall_filesys_lock);
+   //if (!held)
+   //  lock_acquire (&syscall_filesys_lock);
+    if (upage < file_end) {
+      if (file_end - upage < PGSIZE) {
+        /* read page from the last page of file. */
+        int last_page = mmap_f->file_bytes % PGSIZE;
+        file_write_at (mmap_f->file, kpage, last_page, mmap_f->ofs + upage - mmap_f->addr);
+      }
+      else {
+        file_write_at (mmap_f->file, kpage, PGSIZE, mmap_f->ofs + upage - mmap_f->addr);
+      }
+    } 
+     //if (!held)
+     // lock_release (&syscall_filesys_lock);
+  }
+}
+/* GLS's code end */
+
+
+/* GLS's code begin */
+static struct mmap_file* 
+find_mmap_file (struct thread *t, mmapid_t id) {
+  struct list *mmap_list = &(t->mmap_list);
+  struct list_elem *mmap_elem = NULL;
+  for (mmap_elem = list_begin (mmap_list); mmap_elem != list_end (mmap_list); 
+    mmap_elem  = list_next (mmap_elem)) {
+      struct mmap_file* tmp = list_entry (mmap_elem, struct mmap_file, elem);
+      if (tmp->id == id) {
+        return tmp;
+      } 
+    }
+  return NULL;
+}
+#endif
+/* GLS's code end */

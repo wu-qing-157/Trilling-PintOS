@@ -28,11 +28,11 @@ static void cache_flush_one(struct cache_entry *entry) {
 
 // Flush everything in block buffer
 void cache_flush(void) {
-  lock_acquire(&cache_lock);
+  //lock_acquire(&cache_lock);
   for (int i = 0; i < BLOCK_CACHE_SIZE; i++)
     if (cache[i].occupied)
       cache_flush_one(cache + i);
-  lock_release(&cache_lock);
+  //lock_release(&cache_lock);
 }
 
 static struct cache_entry *cache_lookup(block_sector_t sector) {

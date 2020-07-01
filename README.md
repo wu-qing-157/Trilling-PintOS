@@ -15,12 +15,12 @@ Accessing User Memory|GLS|Pass Test
 System Calls|GLS|Pass Test
 Denying Writes to Executables|GLS|Pass Test
 __Virtual Memory__||
-Paging||
-Stack Growth||
-Memory Mapped Files||
-Accessing User Memory||
+Paging|FLY|Pass Test
+Stack Growth|FLY|Pass Test
+Memory Mapped Files|GLS|Pass Test
+Accessing User Memory|FLY|Pass Test
 __File Systems__||
-Indexed and Extensible Files||
+Indexed and Extensible Files|GXY|At least Pass Test
 Subdirectories||
 Buffer Cache|GXY|Seems OK
 Synchronization||
@@ -121,9 +121,4 @@ new_line;
 new_line;
 new_line;
 /* WHO's code end */ 
-<<<<<<< HEAD
 ```
-=======
-```
-
->>>>>>> project2

@@ -103,6 +103,15 @@ struct thread
    /* GLS's code end */
 
 #endif
+
+/* GLS's code begin */
+#ifdef VM
+   struct hash *page_table;
+   int mmap_count;
+   struct list mmap_list;
+   void* current_esp;   
+#endif
+/* GLS's code end */
    
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

@@ -5,6 +5,12 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* GLS's code begin */
+#include "vm/pagetable.h"
+#include "threads/vaddr.h"
+#include "userprog/syscall.h"
+/* GLS's code end */
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -148,16 +154,21 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* GLS's code begin */ 
-  /* The following code is suggested by 4.1.5 (Accessing User Memory) 
-  in the document to handle: a pointer to kernel virtual address. */
-  if (!user) {
-    f->eip = (void*) f->eax;
-    f->eax = 0xffffffff;
-    return;
+/* GLS's code begin */  
+#ifdef VM
+  void* esp = user ? f->esp : thread_current()->current_esp; 
+  // printf ("page fualt: %x %d %x\n", fault_addr, user, esp);
+  if (not_present && is_user_vaddr(fault_addr) && page_fault_handler (fault_addr, write, esp)) {
+     return;
   }
-   /* GLS's code end */
+  else {
+   if (thread_current()->tid > 2)
+      exit_forcely ();
+  }
+#endif
 
+/* GLS's code end */
+  
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

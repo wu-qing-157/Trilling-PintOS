@@ -35,11 +35,8 @@
 /* GXY's code begin */
 
 /* Compare threads by their donated priority (higher smaller) */
-static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL && b != NULL);
-  struct thread *aa = list_entry(a, struct thread, elem);
-  struct thread *bb = list_entry(b, struct thread, elem);
-  return aa->priority > bb->priority;
+static bool priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  return list_entry(a, struct thread, elem)->priority < list_entry(b, struct thread, elem)->priority;
 }
 
 /* GXY's code end */
@@ -127,14 +124,15 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   /* old code begin */
   // if (!list_empty (&sema->waiters)) 
-  //   thread_unblock (list_entry (list_pop_front (&sema->waiters),
-  //                               struct thread, elem));
+    // thread_unblock (list_entry (list_pop_front (&sema->waiters),
+                                // struct thread, elem));
   /* old code end */
   sema->value++;
   /* GXY's code begin */
   if (!list_empty(&sema->waiters)) {
-    list_sort(&sema->waiters, priority_greater, NULL);
-    thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+    struct thread *wakeup = list_entry(list_max(&sema->waiters, priority_cmp, NULL), struct thread, elem);
+    list_remove(&wakeup->elem);
+    thread_unblock(wakeup);
   }
   /* GXY's code end */
   intr_set_level (old_level);
@@ -328,12 +326,12 @@ cond_wait (struct condition *cond, struct lock *lock)
 /* GXY's code begin */
 
 /* Compare by the highest priority of waiting threads */
-static bool sema_priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+static bool sema_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   struct list *aa = &list_entry(a, struct semaphore_elem, elem)->semaphore.waiters;
   struct list *bb = &list_entry(b, struct semaphore_elem, elem)->semaphore.waiters;
   if (list_empty(aa)) return false;
   if (list_empty(bb)) return true;
-  return list_entry(list_front(aa), struct thread, elem)->priority > list_entry(list_front(bb), struct thread, elem)->priority;
+  return list_entry(list_front(aa), struct thread, elem)->priority < list_entry(list_front(bb), struct thread, elem)->priority;
 }
 
 /* GXY's code end */
@@ -361,11 +359,20 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   /* GXY's code begin */
   if (!list_empty(&cond->waiters)) {
     if (!thread_mlfqs) {
-      for (struct list_elem *it = list_begin(&cond->waiters); it != list_end(&cond->waiters); it = list_next(it))
-        list_sort(&list_entry(it, struct semaphore_elem, elem)->semaphore.waiters, priority_greater, NULL);
-      list_sort(&cond->waiters, sema_priority_greater, NULL);
+      for (struct list_elem *it = list_begin(&cond->waiters); it != list_end(&cond->waiters); it = list_next(it)) {
+        struct list *sema_list = &list_entry(it, struct semaphore_elem, elem)->semaphore.waiters;
+        if (!list_empty(sema_list)) {
+          struct list_elem *max = list_max(sema_list, priority_cmp, NULL);
+          list_remove(max);
+          list_push_front(sema_list, max);
+        }
+      }
+      struct semaphore_elem *sema = list_entry(list_max(&cond->waiters, sema_priority_cmp, NULL), struct semaphore_elem, elem);
+      list_remove(&sema->elem);
+      sema_up(&sema->semaphore);
+    } else {
+      sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
     }
-    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
   }
   /* GXY's code end */
 }

@@ -100,12 +100,8 @@ static void modify_donate_priority(struct thread *donator, struct thread *receiv
     modify_donate_priority(receiver, receiver->waiting, false);
 }
 
-/* Compare threads by their priority (higher smaller) */
-static bool priority_greater(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL && b != NULL);
-  struct thread *aa = list_entry(a, struct thread, elem);
-  struct thread *bb = list_entry(b, struct thread, elem);
-  return aa->priority > bb->priority;
+static bool priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  return list_entry(a, struct thread, elem)->priority < list_entry(b, struct thread, elem)->priority;
 }
 
 /* GXY's code end */
@@ -356,7 +352,7 @@ thread_block (void)
    update other data. */
 void
 thread_unblock (struct thread *t) 
-{//printf("thread_unblock: %s\n", t->name);
+{
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -365,15 +361,15 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   /* GXY's code begin */
-  if (t->waiting != NULL) modify_donate_priority(t, t->waiting, true);
+  if (t->waiting != NULL) {
+    modify_donate_priority(t, t->waiting, true);
+    t->waiting = NULL;
+  }
   /* GXY's code end */
   t->status = THREAD_READY;
   intr_set_level (old_level);
   /* GXY's code begin */
-  if (thread_current()->priority < t->priority) {
-    if (intr_context()) intr_yield_on_return();
-    else thread_yield();
-  }
+  if (!intr_context() && thread_current()->priority < t->priority) thread_yield();
   /* GXY's code end */
 }
 
@@ -636,6 +632,11 @@ init_thread (struct thread *t, const char *name, int priority)
     t->p_desc = NULL;
     list_init(&(t->child_process));
   #endif
+  #ifdef VM
+    t->current_esp = NULL;
+    t->mmap_count = 0;
+    list_init(&(t->mmap_list));
+  #endif
   /* GLS's code end */
 }
 
@@ -668,8 +669,9 @@ next_thread_to_run (void)
   /* old code end */
   /* GXY's code begin */
   else {
-    list_sort(&ready_list, priority_greater, NULL);
-    return list_entry(list_pop_front(&ready_list), struct thread, elem);
+    struct thread *th = list_entry(list_max(&ready_list, priority_cmp, NULL), struct thread, elem);
+    list_remove(&th->elem);
+    return th;
   }
   /* GXY's code end */
 }

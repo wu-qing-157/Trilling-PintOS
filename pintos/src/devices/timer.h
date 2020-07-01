@@ -19,11 +19,6 @@ void timer_msleep (int64_t milliseconds);
 void timer_usleep (int64_t microseconds);
 void timer_nsleep (int64_t nanoseconds);
 
-/* GXY's code begin */
-void timer_sleep_impl(int64_t wakeup_tick);
-void timer_wakeup(void);
-/* GXY's code end */
-
 /* Busy waits. */
 void timer_mdelay (int64_t milliseconds);
 void timer_udelay (int64_t microseconds);
