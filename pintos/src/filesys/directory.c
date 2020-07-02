@@ -314,6 +314,7 @@ subdir_create(struct dir* dir, char* dir_name) {
                   && dir_add(dir, dir_name, block_sector));
   if (!success && block_sector != 0)
     free_map_release(block_sector, 1);
+  if (!success) return false;
   struct dir *new_dir = dir_open(inode_open(block_sector));
   success = dir_add(new_dir, ".", block_sector) && dir_add(new_dir, "..", inode_get_inumber(dir->inode));
   dir_close(new_dir);
