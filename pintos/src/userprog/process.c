@@ -64,7 +64,7 @@ process_execute (const char *file_name)
   real_file_name = strtok_r (real_file_name, " ", &save_ptr);
   
   /* initialize process descriptor */
-  struct process_descriptor *p_desc = malloc(sizeof(struct process_descriptor)); //palloc_get_page (0);
+  struct process_descriptor *p_desc = palloc_get_page (0); //malloc(sizeof(struct process_descriptor)); //palloc_get_page (0);
   if (p_desc == NULL) {
     printf("[Error] process_excute: can't palloc a new page.");
     palloc_free_page (fn_copy);
@@ -263,14 +263,14 @@ process_wait (tid_t child_tid /* UNUSED */)
   }
 
   child_p_desc->waited = true;
-  if (!child_p_desc->exited)
-    sema_down(&(child_p_desc->wait_sema));
+  // if (!child_p_desc->exited)
+  sema_down(&(child_p_desc->wait_sema));
   
   list_remove (child_elem);
 
   int exit_status = child_p_desc->exit_status;
-  // palloc_free_page (child_p_desc);
-   free (child_p_desc);
+   // palloc_free_page (child_p_desc);
+  // free (child_p_desc);
    /* child_p_desc must be free by the parent process,
     because the parent process will use child_p_desc->exit_status. */
   return exit_status;
@@ -300,7 +300,7 @@ process_exit (void)
 #endif
   /* close all opened files */
   struct process_descriptor *p_desc = cur->p_desc;
- // printf ("process_exit: %x %d\n", p_desc, p_desc->pid);
+  // printf ("process_exit: %x %d\n", p_desc, p_desc->pid);
   struct list *opened_files = &(p_desc->opened_files);
   while (!list_empty (opened_files)) {
     struct list_elem *front = list_pop_front (opened_files);
@@ -318,7 +318,10 @@ process_exit (void)
       /* child_p_desc must be free by the parent process,
          because the parent process need child_p_desc->exit_status */
       // palloc_free_page (child_p_desc);
-      free (child_p_desc);   
+      // free (child_p_desc);   
+    }
+    else {
+      child_p_desc->parent_thread = NULL;
     }
   }
 
@@ -328,18 +331,17 @@ process_exit (void)
   }
   
   /* free own process_descriptor if no parent */
-  p_desc->exited = true;
   printf("%s: exit(%d)\n", cur->name, p_desc->exit_status);
+  sema_up (&(p_desc->wait_sema));
+  struct thread *parent_thread = p_desc->parent_thread;
+  p_desc->exited = true;
+  
   /* Task 1: print termination messages. */
   
   //printf ("p_desc: %x %x\n", p_desc, p_desc->parent_thread);
 
-  if (p_desc->parent_thread == NULL) {
+  if (parent_thread == NULL) {
     //palloc_free_page (p_desc);
-    free (p_desc);
-  }
-  else {
-    sema_up (&(p_desc->wait_sema));
   }
 
 #ifdef VM

@@ -89,7 +89,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   /* old code begin */
-  // printf ("system call!\n");
+ // printf ("system call!\n");
   // thread_exit ();
   /* old code end */
 
@@ -100,7 +100,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   int syscall_number = 0;
   read_user(f->esp, &syscall_number, sizeof (int));
-  // printf ("syscall_number  %d\n", syscall_number);
+  //printf ("syscall_number  %d\n", syscall_number);
   switch (syscall_number)
   {
   case SYS_HALT: {
@@ -188,9 +188,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     read_user (f->esp + sizeof (int), &fd, sizeof (fd));
     read_user (f->esp + sizeof (int) + sizeof (fd), &buffer, sizeof (buffer));
     read_user (f->esp + sizeof (int) + sizeof (fd) + sizeof (buffer), &size, sizeof (size));
+   // printf ("%d %x %d\n", fd, buffer, size);
     if (is_valid_user_buffer (buffer, size)) {
       f->eax = syscall_write (fd, buffer, size);
     }
+  //  printf ("write end.\n");
     break;
   }
 
@@ -629,6 +631,7 @@ is_valid_uaddr (void *uaddr) {
         return true;
       }
 #else
+    // printf ("map: %x\n", pagedir_get_page(thread_current()->pagedir, uaddr));
     if (pagedir_get_page(thread_current()->pagedir, uaddr) != NULL) { 
       return true;
     }

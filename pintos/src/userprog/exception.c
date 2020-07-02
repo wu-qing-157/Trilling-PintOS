@@ -157,14 +157,19 @@ page_fault (struct intr_frame *f)
 /* GLS's code begin */  
 #ifdef VM
   void* esp = user ? f->esp : thread_current()->current_esp; 
-  // printf ("page fualt: %x %d %x\n", fault_addr, user, esp);
+  //printf ("page fualt: %x %d %x\n", fault_addr, user, esp);
   if (not_present && is_user_vaddr(fault_addr) && page_fault_handler (fault_addr, write, esp)) {
      return;
   }
   else {
+     //printf ("thraed_current: %d\n", thread_current()->tid);
+   
    if (thread_current()->tid > 2)
       exit_forcely ();
   }
+#else
+if (thread_current()->tid > 2)
+      exit_forcely ();
 #endif
 
 /* GLS's code end */
