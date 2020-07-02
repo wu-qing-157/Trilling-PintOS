@@ -19,7 +19,7 @@ struct file
   };
 
 void file_set_dir(struct file* file, const struct dir* dir) {
-  file->dir = dir;
+  file->dir = (struct dir *) dir;
 }
 
 struct dir*
@@ -119,6 +119,9 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
 off_t
 file_write (struct file *file, const void *buffer, off_t size) 
 {
+  /* GXY's code begin */
+  if (inode_isdir(file->inode)) return -1;
+  /* GXY's code end */
   off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_written;
   return bytes_written;
@@ -135,6 +138,9 @@ off_t
 file_write_at (struct file *file, const void *buffer, off_t size,
                off_t file_ofs) 
 {
+  /* GXY's code begin */
+  if (inode_isdir(file->inode)) return -1;
+  /* GXY's code end */
   return inode_write_at (file->inode, buffer, size, file_ofs);
 }
 

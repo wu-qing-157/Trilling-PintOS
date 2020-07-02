@@ -383,6 +383,9 @@ syscall_open (const char *file) {
     else {
       f_desc->file = opened_file;
       f_desc->id = p_desc->opened_count++;
+      /* GXY's code begin */
+      f_desc->dir = file_get_dir(opened_file);
+      /* GXY's code end */
       list_push_back(&(p_desc->opened_files), &(f_desc->elem));
       return_value = f_desc->id;
     }
@@ -731,10 +734,10 @@ syscall_mkdir(const char *dir) {
     dir_close(target_dir);
     free(pure_name);
     return suc;
-  }
-  else
+  } else {
     free(pure_name);
     return false;
+  }
 }
 
 static bool
@@ -744,7 +747,6 @@ syscall_readdir(int fd, void* buffer) {
 
   if (f_desc != NULL && is_dirfile(f_desc)) {
     return dir_readdir(f_desc->dir, buffer);
-    // Problem here: I don't know where file_descripter.dir should be set.
   } else {
     return false;
   }

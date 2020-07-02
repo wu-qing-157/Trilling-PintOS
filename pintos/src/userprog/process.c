@@ -561,7 +561,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
   /* yy's code begin */
-  t->current_dir = file_get_dir(file);
+  t->current_dir = dir_reopen(file_get_dir(file));
   /* yy's code end */
 
   /* GLS's code begin */

@@ -78,6 +78,16 @@ bool inode_isdir(const struct inode* inode) {
   // Problem here: where is isdir set ?
   return inode->data.is_dir;
 }
+
+void inode_set_isdir(struct inode *inode, bool is_dir) {
+  inode->data.is_dir = is_dir;
+  cache_write_at(inode->sector, &inode->data.is_dir, offsetof(struct inode_disk, is_dir), sizeof(bool));
+}
+
+// Warning: the in-memory inode will not be synchronized
+void sector_set_isdir(block_sector_t sector, bool is_dir) {
+  cache_write_at(sector, &is_dir, offsetof(struct inode_disk, is_dir), sizeof(bool));
+}
 /* yy's code end */
 /* GXY's code begin */
 
@@ -374,6 +384,7 @@ inode_create (block_sector_t sector, off_t length)
   if (inode != NULL && inode) {
     inode->data.length = length;
     inode->data.magic = INODE_MAGIC;
+    inode->data.is_dir = false;
     inode->sector = sector;
 
     if (inode_ensure_length(inode)) {

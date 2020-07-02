@@ -7,6 +7,8 @@
 
 struct bitmap;
 
+const int is_dir_offset;
+
 void inode_init (void);
 bool inode_create (block_sector_t, off_t);
 struct inode *inode_open (block_sector_t);
@@ -23,6 +25,8 @@ off_t inode_length (const struct inode *);
 /* yy's code begin */
 int inode_get_opencnt(const struct inode *);
 bool inode_isdir(const struct inode *);
+void inode_set_isdir(struct inode *, bool);
+void sector_set_isdir(block_sector_t, bool);
 /* yy's code end */
 
 #endif /* filesys/inode.h */

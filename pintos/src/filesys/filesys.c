@@ -12,6 +12,7 @@
 #include "threads/thread.h"
 #include "user/syscall.h"
 #include "lib/string.h"
+#include "threads/malloc.h"
 /* yy's code end */
 
 /* Partition that contains the file system. */
@@ -199,6 +200,9 @@ do_format (void)
   free_map_create ();
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
+  /* GXY's code begin */
+  sector_set_isdir(ROOT_DIR_SECTOR, 1);
+  /* GXY's code end */
   free_map_close ();
   printf ("done.\n");
 }
@@ -244,7 +248,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
     *is_dir = true;
   }
 
-  if (path[0] == '/')
+  if (path[0] == '/' || thread_current()->current_dir == NULL)
     *parent_dir = dir_open_root();
   else
     *parent_dir = dir_reopen(thread_current()->current_dir);
@@ -262,6 +266,16 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
     }
     char* next = strtok_r(NULL, "/", &ptr);
     if (next == NULL) {
+      struct dir *tmp = subdir_lookup(*parent_dir, result);
+      if (tmp != NULL && inode_isdir(dir_get_inode(tmp))) {
+        if (*is_dir) {
+          dir_close(tmp);
+          free(cpy_path);
+          return false;
+        } else {
+          *is_dir = true;
+        }
+      }
       strlcpy(*name, result, READDIR_MAX_LEN + 1);
       break;      
     } else {
@@ -273,6 +287,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
         return false;
       }
     }
+    result = next;
   }
   free(cpy_path);
   return true;

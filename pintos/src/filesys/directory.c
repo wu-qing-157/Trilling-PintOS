@@ -34,7 +34,10 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  if (inode_create (sector, entry_cnt * sizeof (struct dir_entry))) {
+    sector_set_isdir(sector, true);
+    return true;
+  } else return false;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -288,12 +291,12 @@ subfile_create(struct dir* dir, char* file_name, off_t initial_size) {
   ASSERT(file_name != NULL);
   if (strlen(file_name) == 0)
     return false;
-  block_sector_t block_sector = -1;
+  block_sector_t block_sector = 0;
   bool success = (dir != NULL
                   && free_map_allocate(1, &block_sector)
                   && inode_create(block_sector, initial_size)
                   && dir_add(dir, file_name, block_sector));
-  if (!success && block_sector != -1)
+  if (!success && block_sector != 0)
     free_map_release(block_sector, 1);
   return success;
 }
@@ -304,12 +307,12 @@ subdir_create(struct dir* dir, char* dir_name) {
   ASSERT(dir_name != NULL);
   if (strlen(dir_name) == 0)
     return false;
-  block_sector_t block_sector = -1;
+  block_sector_t block_sector = 0;
   bool success = (dir != NULL
                   && free_map_allocate(1, &block_sector)
                   && dir_create(block_sector, 0)
                   && dir_add(dir, dir_name, block_sector));
-  if (!success && block_sector != -1)
+  if (!success && block_sector != 0)
     free_map_release(block_sector, 1);
   return success;
 }
