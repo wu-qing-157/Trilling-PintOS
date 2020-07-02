@@ -389,6 +389,8 @@ inode_create (block_sector_t sector, off_t length)
 
     if (inode_ensure_length(inode)) {
       cache_write_at(inode->sector, &length, offsetof(struct inode_disk, length), sizeof(length));
+      cache_write_at(inode->sector, &inode->data.magic, offsetof(struct inode_disk, magic), sizeof(inode->data.magic));
+      cache_write_at(inode->sector, &inode->data.is_dir, offsetof(struct inode_disk, is_dir), sizeof(inode->data.is_dir));
       success = true;
     }
     free(inode);
