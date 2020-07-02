@@ -173,7 +173,7 @@ filesys_remove (const char *name)
       free(file_name);
       return suc;
     } else {
-      bool suc = /* subdir_delete(dir, file_name) ||*/ subfile_delete(dir, file_name); // What's the first half ?
+      bool suc = subfile_delete(dir, file_name);
       dir_close(dir);
       free(file_name);
       return suc;
@@ -202,6 +202,10 @@ do_format (void)
     PANIC ("root directory creation failed");
   /* GXY's code begin */
   sector_set_isdir(ROOT_DIR_SECTOR, 1);
+  struct dir *root = dir_open_root();
+  dir_add(root, ".", ROOT_DIR_SECTOR);
+  dir_add(root, "..", ROOT_DIR_SECTOR);
+  dir_close(root);
   /* GXY's code end */
   free_map_close ();
   printf ("done.\n");
@@ -273,6 +277,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
           free(cpy_path);
           return false;
         } else {
+          dir_close(tmp);
           *is_dir = true;
         }
       }

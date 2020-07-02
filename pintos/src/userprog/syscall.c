@@ -65,7 +65,7 @@ static bool syscall_chdir(const char *dir);
 static bool syscall_mkdir(const char *dir);
 static bool syscall_readdir(int fd, void* buffer);
 static bool syscall_isdir(int fd);
-static bool syscall_inumber(int fd);
+static block_sector_t syscall_inumber(int fd);
 /* yy's code end */
 
 
@@ -384,7 +384,10 @@ syscall_open (const char *file) {
       f_desc->file = opened_file;
       f_desc->id = p_desc->opened_count++;
       /* GXY's code begin */
-      f_desc->dir = file_get_dir(opened_file);
+      if (inode_isdir(file_get_inode(opened_file)))
+        f_desc->dir = dir_open(inode_reopen(file_get_inode(opened_file)));
+      else
+        f_desc->dir = NULL;
       /* GXY's code end */
       list_push_back(&(p_desc->opened_files), &(f_desc->elem));
       return_value = f_desc->id;
@@ -535,6 +538,9 @@ syscall_close (int fd) {
     struct file_descriptor* f_desc = find_file(current_thread, fd);
     if (f_desc != NULL) {
       lock_acquire (&syscall_filesys_lock);
+      /* GXY's code begin */
+      if (f_desc->dir) dir_close(f_desc->dir);
+      /* GXY's code end */
       file_close (f_desc->file);
       list_remove(&(f_desc->elem));
       palloc_free_page (f_desc);
@@ -760,7 +766,7 @@ syscall_isdir(int fd) {
 }
 
 
-static bool
+static block_sector_t
 syscall_inumber(int fd) {
   struct thread* current_thread = thread_current();
   struct file_descriptor* f_desc = find_file(current_thread, fd);
