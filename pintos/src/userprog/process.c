@@ -64,7 +64,7 @@ process_execute (const char *file_name)
   real_file_name = strtok_r (real_file_name, " ", &save_ptr);
   
   /* initialize process descriptor */
-  struct process_descriptor *p_desc = palloc_get_page (0); //malloc(sizeof(struct process_descriptor)); //palloc_get_page (0);
+  struct process_descriptor *p_desc = malloc(sizeof(struct process_descriptor)); //palloc_get_page (0);
   if (p_desc == NULL) {
     printf("[Error] process_excute: can't palloc a new page.");
     palloc_free_page (fn_copy);
@@ -269,8 +269,8 @@ process_wait (tid_t child_tid /* UNUSED */)
   list_remove (child_elem);
 
   int exit_status = child_p_desc->exit_status;
-   palloc_free_page (child_p_desc);
-  //free (child_p_desc);
+  // palloc_free_page (child_p_desc);
+  free (child_p_desc);
 
    /* child_p_desc must be free by the parent process,
     because the parent process will use child_p_desc->exit_status. */
