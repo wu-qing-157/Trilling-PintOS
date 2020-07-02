@@ -269,8 +269,9 @@ process_wait (tid_t child_tid /* UNUSED */)
   list_remove (child_elem);
 
   int exit_status = child_p_desc->exit_status;
-   // palloc_free_page (child_p_desc);
-  // free (child_p_desc);
+   palloc_free_page (child_p_desc);
+  //free (child_p_desc);
+
    /* child_p_desc must be free by the parent process,
     because the parent process will use child_p_desc->exit_status. */
   return exit_status;
@@ -332,17 +333,17 @@ process_exit (void)
   
   /* free own process_descriptor if no parent */
   printf("%s: exit(%d)\n", cur->name, p_desc->exit_status);
-  sema_up (&(p_desc->wait_sema));
   struct thread *parent_thread = p_desc->parent_thread;
   p_desc->exited = true;
+  sema_up (&(p_desc->wait_sema));
   
   /* Task 1: print termination messages. */
   
   //printf ("p_desc: %x %x\n", p_desc, p_desc->parent_thread);
 
-  if (parent_thread == NULL) {
+  // if (parent_thread == NULL) {
     //palloc_free_page (p_desc);
-  }
+  // }
 
 #ifdef VM
   page_table_destroy(cur->page_table);

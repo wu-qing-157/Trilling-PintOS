@@ -146,7 +146,7 @@ void* pick_frame_to_eviction(void){
   struct page_table_node* node = page_search(get_frame_node->thr->page_table, get_frame_node->upage);
   ASSERT(node != NULL);
   if(node->mmap_f == NULL|| 
-  ((struct mmap_file*)(node->mmap_f))->static_data){
+  ((node->mmap_f))->static_data){
     index = swap_in(get_frame_node->frame);
    // // printf ("pick one to swap  %d\n", index);
     ASSERT(evict_page_to_swap(get_frame_node->thr, get_frame_node->upage, index));
