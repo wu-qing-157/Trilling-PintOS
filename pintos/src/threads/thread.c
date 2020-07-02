@@ -768,6 +768,10 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 void thread_modify_waiting(struct thread *old, struct thread *new) {
   for (struct list_elem *it = list_begin(&all_list); it != list_end(&all_list); it = list_next(it)) {
     struct thread *cur = list_entry(it, struct thread, allelem);
-    if (cur->waiting == old && cur != new) cur->waiting = new;
+    if (cur->waiting == old && cur != new) {
+      modify_donate_priority(cur, old, true);
+      cur->waiting = new;
+      donate_priority(cur, new, true);
+    }
   }
 }
