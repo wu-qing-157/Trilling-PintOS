@@ -253,8 +253,27 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  /* old code begin */
+  // lock->holder = NULL;
+  // sema_up (&lock->semaphore);
+  /* old code end */
+
+  /* GXY's code begin */
+  enum intr_level old_level = intr_disable ();
+  struct semaphore *sema = &lock->semaphore;
+  ASSERT (sema != NULL);
+  sema->value++;
+  if (!list_empty(&sema->waiters)) {
+    struct thread *wakeup = list_entry(list_max(&sema->waiters, priority_cmp, NULL), struct thread, elem);
+    list_remove(&wakeup->elem);
+    thread_modify_waiting(lock->holder, wakeup);
+    lock->holder = NULL;
+    thread_unblock(wakeup);
+  } else {
+    lock->holder = NULL;
+  }
+  intr_set_level (old_level);
+  /* GXY's code end */
 }
 
 /* Returns true if the current thread holds LOCK, false

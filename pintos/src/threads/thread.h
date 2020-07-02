@@ -177,4 +177,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* GXY's code begin */
+void thread_modify_waiting(struct thread *, struct thread *);
+/* GXY's code end */
+
 #endif /* threads/thread.h */
