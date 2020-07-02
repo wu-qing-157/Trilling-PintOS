@@ -127,7 +127,7 @@ struct thread
     /* List element used in donating list */
     struct list_elem donating_elem;
     /* Waiting thread */
-    struct lock *lock;
+    struct thread *waiting;
 
     /* Nice used in BSD */
     int nice;
@@ -178,7 +178,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 /* GXY's code begin */
-void thread_update_lock(struct lock *, struct thread *);
+void thread_donate(struct thread *, struct thread *);
+void thread_undo_donate(struct thread *, struct thread *);
 /* GXY's code end */
 
 #endif /* threads/thread.h */

@@ -215,11 +215,23 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   /* GXY's code begin */
-  if (!thread_mlfqs && lock->holder != NULL) thread_current()->lock = lock;
-  /* GXY's code end */
-
-  sema_down (&lock->semaphore);
+  enum intr_level old_level = intr_disable();
+  struct semaphore *sema = &lock->semaphore;
+  while (sema->value == 0) {
+    list_push_back (&sema->waiters, &thread_current ()->elem);
+    if (!thread_mlfqs) thread_donate(thread_current(), lock->holder);
+    thread_block ();
+  }
+  sema->value--;
   lock->holder = thread_current ();
+  if (!thread_mlfqs) {
+    for (struct list_elem *it = list_begin(&sema->waiters); it != list_end(&sema->waiters); it = list_next(it)) {
+      struct thread *cur = list_entry(it, struct thread, elem);
+      thread_donate(cur, thread_current());
+    }
+  }
+  intr_set_level (old_level);
+  /* GXY's code end */
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -260,19 +272,19 @@ lock_release (struct lock *lock)
 
   /* GXY's code begin */
   enum intr_level old_level = intr_disable ();
+  lock->holder = NULL;
   struct semaphore *sema = &lock->semaphore;
-  ASSERT (sema != NULL);
   sema->value++;
-  struct thread *old_holder = lock->holder;
   if (!list_empty(&sema->waiters)) {
+    if (!thread_mlfqs) {
+      for (struct list_elem *it = list_begin(&sema->waiters); it != list_end(&sema->waiters); it = list_next(it)) {
+        struct thread *cur = list_entry(it, struct thread, elem);
+        thread_undo_donate(cur, thread_current());
+      }
+    }
     struct thread *wakeup = list_entry(list_max(&sema->waiters, priority_cmp, NULL), struct thread, elem);
     list_remove(&wakeup->elem);
-    lock->holder = wakeup;
-    thread_update_lock(lock, old_holder);
     thread_unblock(wakeup);
-  } else {
-    lock->holder = NULL;
-    thread_update_lock(lock, old_holder);
   }
   intr_set_level (old_level);
   /* GXY's code end */

@@ -78,10 +78,13 @@ static tid_t allocate_tid (void);
  * Note that a thread cannot change it's priority when it is waiting for other threads.
  */
 static void donate_priority(struct thread *donator, struct thread *receiver, bool new_donator) {
-  if (new_donator) list_push_back(&receiver->donating, &donator->donating_elem);
+  if (new_donator) {
+    donator->waiting = receiver;
+    list_push_back(&receiver->donating, &donator->donating_elem);
+  }
   if (receiver->priority < donator->priority) {
     receiver->priority = donator->priority;
-    if (receiver->lock != NULL) donate_priority(receiver, receiver->lock->holder, false);
+    if (receiver->waiting != NULL) donate_priority(receiver, receiver->waiting, false);
   }
 }
 
@@ -89,15 +92,18 @@ static void donate_priority(struct thread *donator, struct thread *receiver, boo
  * Donator can be NULL if delete_donator is false.
  */
 static void modify_donate_priority(struct thread *donator, struct thread *receiver, bool delete_donator) {
-  if (delete_donator) list_remove(&donator->donating_elem);
+  if (delete_donator) {
+    donator->waiting = NULL;
+    list_remove(&donator->donating_elem);
+  }
   int old_priority = receiver->priority;
   receiver->priority = receiver->raw_priority;
   for (struct list_elem *it = list_begin(&receiver->donating); it != list_end(&receiver->donating); it = list_next(it)) {
     int cur = list_entry(it, struct thread, donating_elem)->priority;
     if (cur > receiver->priority) receiver->priority = cur;
   }
-  if (receiver->priority < old_priority && receiver->lock != NULL)
-    modify_donate_priority(receiver, receiver->lock->holder, false);
+  if (receiver->priority < old_priority && receiver->waiting != NULL)
+    modify_donate_priority(receiver, receiver->waiting, false);
 }
 
 static bool priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
@@ -333,11 +339,6 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
-  /* GXY's code begin */
-  struct thread *cur = thread_current();
-  if (cur->lock != NULL) donate_priority(cur, cur->lock->holder, true);
-  /* GXY's code end */ 
-
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -360,12 +361,6 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
-  /* GXY's code begin */
-  if (t->lock != NULL) {
-    modify_donate_priority(t, t->lock->holder, true);
-    t->lock = NULL;
-  }
-  /* GXY's code end */
   t->status = THREAD_READY;
   intr_set_level (old_level);
   /* GXY's code begin */
@@ -619,7 +614,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /* GXY's code begin */
   list_init(&t->donating);
   t->raw_priority = priority;
-  t->lock = NULL;
+  t->waiting = NULL;
   t->nice = 0;
   /* GXY's code end */
 
@@ -765,13 +760,10 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-void thread_update_lock(struct lock *lock, struct thread *old_holder) {
-  for (struct list_elem *it = list_begin(&all_list); it != list_end(&all_list); it = list_next(it)) {
-    struct thread *cur = list_entry(it, struct thread, allelem);
-    if (cur->lock == lock) modify_donate_priority(cur, old_holder, true);
-  }
-  for (struct list_elem *it = list_begin(&all_list); it != list_end(&all_list); it = list_next(it)) {
-    struct thread *cur = list_entry(it, struct thread, allelem);
-    if (cur->lock == lock && cur != lock->holder) donate_priority(cur, lock->holder, true);
-  }
+void thread_donate(struct thread *donator, struct thread *receiver) {
+  donate_priority(donator, receiver, true);
+}
+
+void thread_undo_donate(struct thread *donator, struct thread *receiver) {
+  modify_donate_priority(donator, receiver, true);
 }
