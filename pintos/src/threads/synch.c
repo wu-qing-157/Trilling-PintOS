@@ -215,7 +215,7 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   /* GXY's code begin */
-  if (!thread_mlfqs && lock->holder != NULL) thread_current()->waiting = lock->holder;
+  if (!thread_mlfqs && lock->holder != NULL) thread_current()->lock = lock;
   /* GXY's code end */
 
   sema_down (&lock->semaphore);
@@ -263,14 +263,16 @@ lock_release (struct lock *lock)
   struct semaphore *sema = &lock->semaphore;
   ASSERT (sema != NULL);
   sema->value++;
+  struct thread *old_holder = lock->holder;
   if (!list_empty(&sema->waiters)) {
     struct thread *wakeup = list_entry(list_max(&sema->waiters, priority_cmp, NULL), struct thread, elem);
     list_remove(&wakeup->elem);
-    thread_modify_waiting(lock->holder, wakeup);
-    lock->holder = NULL;
+    lock->holder = wakeup;
+    thread_update_lock(lock, old_holder);
     thread_unblock(wakeup);
   } else {
     lock->holder = NULL;
+    thread_update_lock(lock, old_holder);
   }
   intr_set_level (old_level);
   /* GXY's code end */
