@@ -69,6 +69,7 @@ static struct cache_entry *cache_lookup_or_evict(block_sector_t sector, bool nee
 }
 
 void cache_read(block_sector_t sector, void *dest) {
+  *(uint8_t *) dest = 0; // prevent page fault
   lock_acquire(&cache_lock);
   struct cache_entry *entry = cache_lookup_or_evict(sector, true);
   entry->accessed = true;
@@ -77,6 +78,8 @@ void cache_read(block_sector_t sector, void *dest) {
 }
 
 void cache_read_at(block_sector_t sector, void *dest, size_t start, size_t cnt) {
+  if (cnt == 0) return;
+  *(uint8_t *) dest = 0; // prevent page fault
   lock_acquire(&cache_lock);
   struct cache_entry *entry = cache_lookup_or_evict(sector, true);
   entry->accessed = true;
@@ -85,6 +88,7 @@ void cache_read_at(block_sector_t sector, void *dest, size_t start, size_t cnt) 
 }
 
 void cache_write(block_sector_t sector, const void *src) {
+  *(uint8_t *) src = *(uint8_t *) src; // prevent page fault
   lock_acquire(&cache_lock);
   struct cache_entry *entry = cache_lookup_or_evict(sector, false);
   entry->accessed = true;
@@ -94,6 +98,8 @@ void cache_write(block_sector_t sector, const void *src) {
 }
 
 void cache_write_at(block_sector_t sector, const void *src, size_t start, size_t cnt) {
+  if (cnt == 0) return;
+  *(uint8_t *) src = *(uint8_t *) src; // prevent page fault
   lock_acquire(&cache_lock);
   struct cache_entry *entry = cache_lookup_or_evict(sector, cnt < BLOCK_SECTOR_SIZE);
   entry->accessed = true;
