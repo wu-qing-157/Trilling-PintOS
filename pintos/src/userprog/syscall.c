@@ -703,7 +703,7 @@ syscall_chdir(const char *dir) {
     if (parse_path(dir, &target_dir, &name, &is_dir)) {
       ASSERT(target_dir != NULL)
       ASSERT(name != NULL)
-      struct dir *res = subdir_lookup(target_dir, name);
+      struct dir *res = subfile_lookup(target_dir, name, true);
       if (res != NULL) {
         dir_close(cur_thread->current_dir);
         dir_close(target_dir);
@@ -727,21 +727,20 @@ syscall_chdir(const char *dir) {
 
 static bool
 syscall_mkdir(const char *dir) {
-  struct dir* target_dir;
-  char *pure_name = malloc(READDIR_MAX_LEN + 1);
+  struct dir* parent_dir;
+  char *name = malloc(READDIR_MAX_LEN + 1);
   bool is_dir;
   ASSERT(dir != NULL)
-  ASSERT(pure_name != NULL)
-  if(!is_rootpath(dir) && parse_path(dir, &target_dir, &pure_name, &is_dir))
-  {
-    ASSERT(target_dir != NULL)
-    ASSERT(pure_name != NULL)
-    bool suc = subdir_create(target_dir, pure_name);
-    dir_close(target_dir);
-    free(pure_name);
+  ASSERT(name != NULL)
+  if(parse_path(dir, &parent_dir, &name, &is_dir)) {
+    ASSERT(parent_dir != NULL)
+    ASSERT(name != NULL)
+    bool suc = subdir_create(parent_dir, name);
+    dir_close(parent_dir);
+    free(name);
     return suc;
   } else {
-    free(pure_name);
+    free(name);
     return false;
   }
 }
@@ -764,7 +763,6 @@ syscall_isdir(int fd) {
   struct file_descriptor* f_desc = find_file(current_thread, fd);
   return f_desc != NULL && is_dirfile(f_desc);
 }
-
 
 static block_sector_t
 syscall_inumber(int fd) {

@@ -123,13 +123,13 @@ filesys_open (const char *name)
     struct file* tmp;
     if (is_dir) {
       struct dir* target_dir;
-      target_dir = subdir_lookup(dir, file_name);
-      tmp = file_open(inode_reopen(dir_get_inode(target_dir))); // I did not understand.
+      target_dir = subfile_lookup(dir, file_name, true);
+      tmp = file_open(inode_reopen(dir_get_inode(target_dir)));
       file_set_dir(tmp, dir_reopen(dir));
       dir_close(target_dir);
     } else {
       struct file* target_file;
-      target_file = subfile_lookup(dir, file_name);
+      target_file = subfile_lookup(dir, file_name, false);
       tmp = target_file;
     }
     dir_close(dir);
@@ -214,7 +214,6 @@ do_format (void)
 /* yy's code begin */
 
 /* Check whether a path is rootpath. */
-// NOTEHERE: this function did not deal with such symbols as .., ., or //
 bool
 is_rootpath(const char* path) {
   if (path == NULL) return false;
@@ -237,8 +236,6 @@ check_name(const char* name) {
 
 /* Readin a path(not a root path), judge whether it is a directory or a file.
    Also find its parent directory and its name. */
-// NOTEHERE: this function did not deal with such symbols as .. . //
-// and I am curious about where they are handeled in ymt's code
 bool
 parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir) {
   *is_dir = false;
@@ -270,7 +267,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
     }
     char* next = strtok_r(NULL, "/", &ptr);
     if (next == NULL) {
-      struct dir *tmp = subdir_lookup(*parent_dir, result);
+      struct dir *tmp = subfile_lookup(*parent_dir, result, true);
       if (tmp != NULL && inode_isdir(dir_get_inode(tmp))) {
         if (*is_dir) {
           dir_close(tmp);
@@ -285,7 +282,7 @@ parse_path(const char* path, struct dir** parent_dir, char** name, bool* is_dir)
       break;      
     } else {
       struct dir* tmp = *parent_dir;
-      *parent_dir = subdir_lookup(*parent_dir, result);
+      *parent_dir = subfile_lookup(*parent_dir, result, true);
       dir_close(tmp);
       if (*parent_dir == NULL){
         free(cpy_path);

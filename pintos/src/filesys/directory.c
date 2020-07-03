@@ -247,42 +247,27 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 }
 
 /* yy's code begin */
-/* Lookup a subfile and open. */
+/* Lookup a file or a subdir in directory and open. */
 struct file*
-subfile_lookup(struct dir* dir, char* file_name) {
-  ASSERT(dir != NULL)
-  ASSERT(file_name != NULL)
-  if (strlen(file_name) == 0)
+subfile_lookup(struct dir* directory, char* name, bool is_dir) {
+  ASSERT(directory != NULL)
+  ASSERT(name != NULL)
+  if (strlen(name) == 0)
     return NULL;
   struct inode* inode = NULL;
-  bool suc = dir_lookup(dir, file_name, &inode);
-  if (!suc || inode == NULL)
+  if (!dir_lookup(directory, name, &inode))
     return NULL;
-  if (inode_isdir(inode)) { // is a directory
+  if (inode_isdir(inode) ^ is_dir) { // wrong type of directory or file
     inode_close(inode);
     return NULL;
   }
-  struct file* file = file_open(inode);
-  file_set_dir(file, dir_reopen(dir));
-  return file;
-}
-
-/* Lookup a subdirectory and open. */
-struct dir*
-subdir_lookup(struct dir* current_dir, char* subdir_name) {
-  ASSERT(current_dir != NULL)
-  ASSERT(subdir_name != NULL)
-  if (strlen(subdir_name) == 0)
-    return NULL;
-  struct inode* inode = NULL;
-  bool suc = dir_lookup(current_dir, subdir_name, &inode);
-  if (!suc || inode == NULL)
-    return NULL;
-  if (!inode_isdir(inode)) { // not a directory
-    inode_close(inode);
-    return NULL;
+  if (is_dir) {
+    return dir_open(inode);
+  } else {
+    struct file* file = file_open(inode);
+    file_set_dir(file, dir_reopen(directory));
+    return file;
   }
-  return dir_open(inode);
 }
 
 /* Create a subfile in a given directory. */
@@ -357,7 +342,7 @@ subdir_delete(struct dir* current_dir, char* dir_name) {
     inode_close(inode);
     return false;
   } else {
-    struct dir* cpy_dir = dir_open(inode); // I don't quite get the meaning of copying dir.
+    struct dir* cpy_dir = dir_open(inode);
     char* buffer = malloc(NAME_MAX + 1);
     ASSERT(buffer != NULL)
     if (dir_readdir(cpy_dir, buffer)) { // The directory contains other entries.

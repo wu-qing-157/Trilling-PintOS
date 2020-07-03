@@ -33,11 +33,10 @@ bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 
 /* yy's code begin */
 bool subfile_create(struct dir* dir, char* file_name, off_t initial_size);
-struct file* subfile_lookup(struct dir* dir, char* file_name);
+struct file* subfile_lookup(struct dir* dir, char* file_name, bool is_dir);
 bool subfile_delete(struct dir* dir, char* file_name);
 
 bool subdir_create(struct dir* current_dir, char* dir_name);
-struct dir* subdir_lookup(struct dir* current_dir, char* dir_name);
 bool subdir_delete(struct dir* current_dir, char* dir_name);
 
 bool is_dirfile(struct file_descriptor* f_desc);
