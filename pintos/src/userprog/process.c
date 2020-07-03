@@ -341,9 +341,10 @@ process_exit (void)
   
   //printf ("p_desc: %x %x\n", p_desc, p_desc->parent_thread);
 
-  // if (parent_thread == NULL) {
+  if (parent_thread == NULL) {
+    free (p_desc);
     //palloc_free_page (p_desc);
-  // }
+  }
 
 #ifdef VM
   page_table_destroy(cur->page_table);
