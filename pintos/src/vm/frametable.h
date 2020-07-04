@@ -10,7 +10,7 @@
 struct frame_table_node{
   void* frame; 
   void* upage;
-  struct thread* thr; //every thread processes a frame_table
+  struct thread* thr; //entry belongs to which thread
   bool referenced; /* referenced: this round will not be replaced */
   struct hash_elem hash_node;
   struct list_elem list_node;
