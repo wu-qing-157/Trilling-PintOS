@@ -1,3 +1,4 @@
-build
+build/*
+!build/grade
 bochsrc.txt
 bochsout.txt
