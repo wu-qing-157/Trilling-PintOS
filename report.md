@@ -179,6 +179,10 @@ Several functions are added to support extending the file or releasing the unnec
 
 Thanks to the implementation of buffer cache, we now support to write a block partly to the file system, so any bounce buffer is no longer needed.
 
+#### Task 3. Subdirectory
+
+In the basic file system, all files live in a single directory, and we'll now replace it by a hierarchical name space. To implement this, we call function `parse_directory` to parse a directory. For the special file names `.` and `..`, two special files named "." and ".." are added whenever we add a new directory, pointing to the current directory and parent directory, respectively. Directory information is stored in  `inode`  disk. Some functions arer added in sys_call for the support of system call.
+
 
 
 
