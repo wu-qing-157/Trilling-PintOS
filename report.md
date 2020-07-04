@@ -48,7 +48,7 @@ The implementation of advanced scheduler is exactly the same as described in the
 
 ## Project 2: User Programs
 
-The project 2 is based on initial project 1. In pintos, each user process has only one thread.  
+In pintos, each user process has only one thread.  
 
 ### Basic Structure
 In `process.h`, I define `struct process_descriptor` which contains all information of a user process. 
